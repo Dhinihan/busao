@@ -13,7 +13,7 @@ const TRAJETOS: readonly TrajetoDemo[] = [
   {
     id: 1001,
     letreiro: "8000-10",
-    descricao: "Term. Pq. D. Pedro II − Metrô Belém",
+    descricao: "Term. Pq. D. Pedro II → Metrô Belém",
     origem: [-23.5453, -46.6244],
     destino: [-23.5555, -46.6101],
     frota: 7,
@@ -21,7 +21,7 @@ const TRAJETOS: readonly TrajetoDemo[] = [
   {
     id: 1002,
     letreiro: "702U-10",
-    descricao: "Term. Campo Limpo − Av. Paulista",
+    descricao: "Term. Campo Limpo → Av. Paulista",
     origem: [-23.6438, -46.6746],
     destino: [-23.5614, -46.6559],
     frota: 9,
@@ -29,7 +29,7 @@ const TRAJETOS: readonly TrajetoDemo[] = [
   {
     id: 1003,
     letreiro: "477P-10",
-    descricao: "Cid. A.E. Carvalho − Term. Pq. D. Pedro II",
+    descricao: "Cid. A.E. Carvalho → Term. Pq. D. Pedro II",
     origem: [-23.5015, -46.6097],
     destino: [-23.5453, -46.6244],
     frota: 6,
@@ -37,7 +37,7 @@ const TRAJETOS: readonly TrajetoDemo[] = [
   {
     id: 1004,
     letreiro: "917M-10",
-    descricao: "Term. Vila Prudente − Metrô Sé",
+    descricao: "Term. Vila Prudente → Metrô Sé",
     origem: [-23.5854, -46.5831],
     destino: [-23.5505, -46.6333],
     frota: 8,
@@ -45,7 +45,7 @@ const TRAJETOS: readonly TrajetoDemo[] = [
   {
     id: 1005,
     letreiro: "N106-11",
-    descricao: "Term. Lapa − Av. Paulista",
+    descricao: "Term. Lapa → Av. Paulista",
     origem: [-23.5224, -46.6693],
     destino: [-23.5614, -46.6559],
     frota: 5,
@@ -53,7 +53,7 @@ const TRAJETOS: readonly TrajetoDemo[] = [
   {
     id: 1006,
     letreiro: "6368-10",
-    descricao: "Term. Grajaú − Est. da Luz",
+    descricao: "Term. Grajaú → Est. da Luz",
     origem: [-23.7011, -46.6971],
     destino: [-23.5352, -46.6343],
     frota: 10,
