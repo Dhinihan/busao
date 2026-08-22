@@ -7,7 +7,7 @@
   --ambar: #ffb300;
   --ambar-escura: #a06d00;
   --led-fundo: #131211;
-  --verde-vivo: #12934f;
+  --verde-vivo: #0a6b3c;
   --vermelho: #bf3b2b;
 }
 
@@ -470,6 +470,10 @@ button {
   border-radius: 16px;
   padding: 26px;
   box-shadow: 0 24px 80px rgba(23, 24, 26, 0.35);
+}
+
+.wizard:focus-visible {
+  outline: none;
 }
 
 .wizard__titulo {

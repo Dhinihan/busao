@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, ErroApi } from "../api";
 
 type Passo = "conta" | "aplicativo" | "token";
@@ -47,6 +47,47 @@ export function Wizard(props: {
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const cartaoRef = useRef<HTMLDivElement | null>(null);
+
+  const { aoDispensar } = props;
+
+  useEffect(() => {
+    const focoAnterior = document.activeElement as HTMLElement | null;
+    cartaoRef.current?.focus();
+
+    function aoTeclar(evento: KeyboardEvent): void {
+      if (evento.key === "Escape") {
+        aoDispensar();
+        return;
+      }
+      if (evento.key !== "Tab") return;
+      const raiz = cartaoRef.current;
+      if (raiz === null) return;
+      const focaveis = Array.from(
+        raiz.querySelectorAll<HTMLElement>(
+          "a[href], button:not([disabled]), input, [tabindex]:not([tabindex='-1'])",
+        ),
+      );
+      if (focaveis.length === 0) return;
+      const primeiro = focaveis[0];
+      const ultimo = focaveis[focaveis.length - 1];
+      if (primeiro === undefined || ultimo === undefined) return;
+      const ativo = document.activeElement;
+      if (evento.shiftKey && ativo === primeiro) {
+        evento.preventDefault();
+        ultimo.focus();
+      } else if (!evento.shiftKey && ativo === ultimo) {
+        evento.preventDefault();
+        primeiro.focus();
+      }
+    }
+
+    document.addEventListener("keydown", aoTeclar);
+    return () => {
+      document.removeEventListener("keydown", aoTeclar);
+      focoAnterior?.focus();
+    };
+  }, [aoDispensar]);
 
   const passo = PASSOS[indice] as (typeof PASSOS)[number];
 
@@ -80,10 +121,12 @@ export function Wizard(props: {
   return (
     <div className="wizard__fundo">
       <div
+        ref={cartaoRef}
         className="wizard"
         role="dialog"
         aria-modal="true"
         aria-labelledby="wizard-titulo"
+        tabIndex={-1}
       >
         <span className="led">busão·sp</span>
         <h2 id="wizard-titulo" className="wizard__titulo">
