@@ -147,8 +147,10 @@ export function paraLinha(bruto: unknown): Linha | null {
     : ehTexto(parte2)
       ? parte2
       : "";
-  const sentidoVolta = campoDe(bruto, "sl") === 2;
-  const destino = (sentidoVolta ? [primario, secundario] : [secundario, primario])
+  const rumoAoSecundario = campoDe(bruto, "sl") === 2;
+  const destino = (
+    rumoAoSecundario ? [secundario, primario] : [primario, secundario]
+  )
     .filter(ehTexto)
     .find((t) => t !== "");
   return {
