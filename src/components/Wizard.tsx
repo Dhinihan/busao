@@ -37,8 +37,12 @@ const PASSOS: readonly {
   },
 ];
 
-export function Wizard(props: { aoConcluir: () => void; aoDispensar: () => void }) {
-  const [indice, setIndice] = useState(0);
+export function Wizard(props: {
+  aoConcluir: () => void;
+  aoDispensar: () => void;
+  passoInicial?: number;
+}) {
+  const [indice, setIndice] = useState(props.passoInicial ?? 0);
   const [token, setToken] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);

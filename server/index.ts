@@ -4,14 +4,25 @@ import { Hono } from "hono";
 import { linhasDemo, posicoesDemo } from "./demo";
 import {
   buscarLinhas,
+  definirAoAutenticar,
   ErroOlhoVivo,
+  limparSessao,
   posicoesDaLinha,
   validarToken,
 } from "./olhovivo";
-import { lerToken, salvarToken } from "./token-store";
+import {
+  apagarToken,
+  lerEstado,
+  marcarValidadoSeAtual,
+  salvarToken,
+} from "./token-store";
 
 const DEMO = process.env["DEMO"] === "1";
 const PORTA = Number(process.env["PORT"] ?? 8787);
+
+definirAoAutenticar((token) => {
+  void marcarValidadoSeAtual(token).catch(() => {});
+});
 
 const app = new Hono();
 
@@ -24,9 +35,15 @@ app.onError((erro, c) => {
 });
 
 app.get("/api/status", async (c) => {
-  if (DEMO) return c.json({ configurado: false, demo: true });
-  const token = await lerToken();
-  return c.json({ configurado: token !== null, demo: false });
+  if (DEMO) {
+    return c.json({ configurado: false, demo: true, validado: false });
+  }
+  const estado = await lerEstado();
+  return c.json({
+    configurado: estado.token !== null,
+    demo: false,
+    validado: estado.validadoDesde !== null,
+  });
 });
 
 app.post("/api/token", async (c) => {
@@ -50,8 +67,14 @@ app.post("/api/token", async (c) => {
   } catch {
     validado = false;
   }
-  await salvarToken(bruto);
+  await salvarToken(bruto, validado ? new Date().toISOString() : null);
   return c.json({ validado });
+});
+
+app.delete("/api/token", async (c) => {
+  limparSessao();
+  await apagarToken();
+  return c.body(null, 204);
 });
 
 app.get("/api/linhas", async (c) => {

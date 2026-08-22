@@ -1,4 +1,4 @@
-import { lerToken } from "./token-store";
+import { lerEstado } from "./token-store";
 
 const API_BASE = "https://api.olhovivo.sptrans.com.br/v2.1";
 
@@ -35,6 +35,18 @@ type Sessao = {
 
 let sessao: Sessao | null = null;
 
+let aoAutenticar: ((token: string) => void) | null = null;
+
+export function definirAoAutenticar(
+  fn: ((token: string) => void) | null,
+): void {
+  aoAutenticar = fn;
+}
+
+export function limparSessao(): void {
+  sessao = null;
+}
+
 function campoDe(objeto: object, chave: string): unknown {
   if (!(chave in objeto)) return undefined;
   return Reflect.get(objeto, chave);
@@ -69,18 +81,21 @@ async function entrar(token: string): Promise<Sessao> {
   if (cookie === undefined || cookie === "") {
     throw new ErroOlhoVivo("autenticação não devolveu cookie de sessão");
   }
+  aoAutenticar?.(token);
   return { token, cookie };
 }
 
 async function requisitar(caminho: string): Promise<unknown> {
-  const token = await lerToken();
+  const estado = await lerEstado();
+  const token = estado.token;
   if (token === null) throw new ErroOlhoVivo("token da SPTrans não configurado");
 
   for (let tentativa = 0; tentativa < 2; tentativa += 1) {
-    if (sessao?.token !== token) {
-      sessao = await entrar(token);
+    let atual = sessao;
+    if (atual === null || atual.token !== token) {
+      atual = await entrar(token);
+      sessao = atual;
     }
-    const atual = sessao;
     let resposta: Response;
     try {
       resposta = await fetch(`${API_BASE}${caminho}`, {

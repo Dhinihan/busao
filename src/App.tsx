@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, ErroApi } from "./api";
 import { Estrela } from "./components/Estrela";
 import { Mapa } from "./components/Mapa";
@@ -9,6 +9,7 @@ import type { Linha, StatusApi } from "./types";
 export function App() {
   const [status, setStatus] = useState<StatusApi | null>(null);
   const [wizardDispensado, setWizardDispensado] = useState(false);
+  const [wizardAbertoManualmente, setWizardAbertoManualmente] = useState(false);
   const [termoBusca, setTermoBusca] = useState("");
   const [resultados, setResultados] = useState<readonly Linha[] | null>(null);
   const [buscando, setBuscando] = useState(false);
@@ -19,17 +20,31 @@ export function App() {
   const { favoritas, alternar, tem } = useFavoritas();
   const termoPostergado = useValorPostergado(termoBusca.trim(), 350);
 
-  const conectado =
-    status !== null && (status.configurado || status.demo);
+  const conectado = status !== null && (status.configurado || status.demo);
   const wizardAberto =
     status !== null && !status.configurado && !status.demo && !wizardDispensado;
+  const mostrarWizard = wizardAberto || wizardAbertoManualmente;
+  const chavePendente =
+    status !== null && status.configurado && !status.demo && !status.validado;
 
-  useEffect(() => {
+  const recarregarStatus = useCallback(() => {
     api
       .status()
       .then(setStatus)
-      .catch(() => setStatus({ configurado: false, demo: false }));
+      .catch(() =>
+        setStatus({ configurado: false, demo: false, validado: false }),
+      );
   }, []);
+
+  useEffect(() => {
+    recarregarStatus();
+  }, [recarregarStatus]);
+
+  function fecharWizard(): void {
+    setWizardAbertoManualmente(false);
+    setWizardDispensado(true);
+    recarregarStatus();
+  }
 
   useEffect(() => {
     if (!conectado || termoPostergado.length < 3) {
@@ -70,10 +85,34 @@ export function App() {
       <aside className="painel">
         <header className="painel__topo">
           <span className="led led--marca">busão·sp</span>
-          {status?.demo === true && (
-            <span className="selo-demo">modo demonstração</span>
-          )}
+          <div className="painel__acoes">
+            {status?.demo === true && (
+              <span className="selo-demo">modo demonstração</span>
+            )}
+            <button
+              type="button"
+              className="botao-link botao-link--pequeno"
+              onClick={() => setWizardAbertoManualmente(true)}
+            >
+              configurar
+            </button>
+          </div>
         </header>
+
+        {chavePendente && (
+          <p className="aviso-pendente">
+            <span className="pendente-dot" aria-hidden="true" />
+            Chave salva — aguardando a SPTrans ativar. Tentamos reconectar
+            automaticamente.{" "}
+            <button
+              type="button"
+              className="botao-link"
+              onClick={() => setWizardAbertoManualmente(true)}
+            >
+              trocar chave
+            </button>
+          </p>
+        )}
 
         <div className="busca">
           <label className="rotulo" htmlFor="campo-busca">
@@ -173,7 +212,7 @@ export function App() {
               <button
                 type="button"
                 className="botao-link"
-                onClick={() => setWizardDispensado(false)}
+                onClick={() => setWizardAbertoManualmente(true)}
               >
                 Abrir configuração
               </button>
@@ -243,10 +282,11 @@ export function App() {
         <Mapa linha={linhaAtiva} estado={estadoPosicoes} />
       </main>
 
-      {wizardAberto && (
+      {mostrarWizard && (
         <Wizard
-          aoConcluir={() => setStatus({ configurado: true, demo: false })}
-          aoDispensar={() => setWizardDispensado(true)}
+          aoConcluir={fecharWizard}
+          aoDispensar={fecharWizard}
+          passoInicial={status?.configurado === true ? 2 : 0}
         />
       )}
     </div>

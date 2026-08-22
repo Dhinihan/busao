@@ -84,4 +84,9 @@ export const api = {
       corpo.validado === true
     );
   },
+
+  async apagarToken(): Promise<void> {
+    const resposta = await fetch("/api/token", { method: "DELETE" });
+    if (!resposta.ok) throw await lerErro(resposta);
+  },
 };

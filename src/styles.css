@@ -113,6 +113,40 @@ button {
   white-space: nowrap;
 }
 
+.painel__acoes {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.botao-link--pequeno {
+  font-size: 12px;
+  color: var(--tinta-fraca);
+}
+
+.aviso-pendente {
+  margin: -8px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--tinta-fraca);
+  border: 1px dashed var(--borda);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.pendente-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ambar-escura);
+  animation: piscar 2s ease-in-out infinite;
+  flex: none;
+}
+
 .rotulo {
   display: block;
   font-size: 11px;
@@ -231,7 +265,8 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vivo {
+  .vivo,
+  .pendente-dot {
     animation: none;
   }
 }

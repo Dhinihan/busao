@@ -19,4 +19,5 @@ export type PosicoesDaLinha = {
 export type StatusApi = {
   readonly configurado: boolean;
   readonly demo: boolean;
+  readonly validado: boolean;
 };
