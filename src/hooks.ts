@@ -74,6 +74,7 @@ export function useFavoritas(): {
 }
 
 const INTERVALO_MS = 10_000;
+const TIMEOUT_MS = 8_000;
 
 export type EstadoPosicoes = {
   readonly dados: PosicoesDaLinha | null;
@@ -95,11 +96,17 @@ export function usePosicoes(idLinha: number | null): EstadoPosicoes {
     if (idLinha === null) return;
 
     let cancelado = false;
+    let emVoo = false;
     let timer: number | undefined;
+    let controle: AbortController | null = null;
 
     const consultar = async (): Promise<void> => {
+      if (emVoo) return;
+      emVoo = true;
+      controle = new AbortController();
+      const tempoEsgotado = window.setTimeout(() => controle?.abort(), TIMEOUT_MS);
       try {
-        const dados = await api.posicoes(idLinha);
+        const dados = await api.posicoes(idLinha, { sinal: controle.signal });
         if (!cancelado) {
           setEstado({ dados, erro: null, atualizadoEm: new Date() });
         }
@@ -112,6 +119,8 @@ export function usePosicoes(idLinha: number | null): EstadoPosicoes {
           setEstado((atual) => ({ ...atual, erro: mensagem }));
         }
       } finally {
+        window.clearTimeout(tempoEsgotado);
+        emVoo = false;
         if (!cancelado && !document.hidden) {
           timer = window.setTimeout(() => void consultar(), INTERVALO_MS);
         }
@@ -129,6 +138,7 @@ export function usePosicoes(idLinha: number | null): EstadoPosicoes {
     return () => {
       cancelado = true;
       window.clearTimeout(timer);
+      controle?.abort();
       document.removeEventListener("visibilitychange", aoMudarVisibilidade);
     };
   }, [idLinha]);

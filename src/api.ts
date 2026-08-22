@@ -1,8 +1,13 @@
-import type { Linha, PosicoesDaLinha, StatusApi } from "./types";
+import type {
+  Linha,
+  PosicaoVeiculo,
+  PosicoesDaLinha,
+  StatusApi,
+} from "./types";
 
 export class ErroApi extends Error {}
 
-function mensagemDeErro(corpo: unknown, status: number): string {
+export function mensagemDeErro(corpo: unknown, status: number): string {
   if (
     typeof corpo === "object" &&
     corpo !== null &&
@@ -26,11 +31,24 @@ async function lerErro(resposta: Response): Promise<ErroApi> {
   return new ErroApi(mensagemDeErro(corpo, resposta.status));
 }
 
-async function obterJson<T>(url: string): Promise<T> {
-  const resposta = await fetch(url);
+async function obterCorpo(url: string, init?: RequestInit): Promise<unknown> {
+  const resposta = await fetch(url, init);
   const corpo: unknown = await resposta.json().catch(() => null);
   if (!resposta.ok) throw new ErroApi(mensagemDeErro(corpo, resposta.status));
-  return corpo as T;
+  return corpo;
+}
+
+function ehStatus(valor: unknown): valor is StatusApi {
+  return (
+    typeof valor === "object" &&
+    valor !== null &&
+    "configurado" in valor &&
+    typeof valor.configurado === "boolean" &&
+    "demo" in valor &&
+    typeof valor.demo === "boolean" &&
+    "validado" in valor &&
+    typeof valor.validado === "boolean"
+  );
 }
 
 function ehLinha(valor: unknown): valor is Linha {
@@ -46,13 +64,33 @@ function ehLinha(valor: unknown): valor is Linha {
   );
 }
 
+function paraPosicoes(bruto: unknown): PosicoesDaLinha | null {
+  if (typeof bruto !== "object" || bruto === null) return null;
+  if (!("vs" in bruto) || !Array.isArray(bruto.vs)) return null;
+  const veiculos: PosicaoVeiculo[] = [];
+  for (const item of bruto.vs) {
+    if (typeof item !== "object" || item === null) continue;
+    if (!("p" in item) || typeof item.p !== "string") continue;
+    if (!("py" in item) || typeof item.py !== "number") continue;
+    if (!("px" in item) || typeof item.px !== "number") continue;
+    const acessivel = "a" in item && item.a === true;
+    veiculos.push({ prefixo: item.p, lat: item.py, lng: item.px, acessivel });
+  }
+  const horario = "hr" in bruto && typeof bruto.hr === "string" ? bruto.hr : "";
+  return { horario, veiculos };
+}
+
 export const api = {
-  status(): Promise<StatusApi> {
-    return obterJson("/api/status");
+  async status(): Promise<StatusApi> {
+    const corpo = await obterCorpo("/api/status");
+    if (!ehStatus(corpo)) {
+      throw new ErroApi("resposta de status inválida");
+    }
+    return corpo;
   },
 
   async buscarLinhas(termo: string): Promise<readonly Linha[]> {
-    const dados = await obterJson<unknown>(
+    const dados = await obterCorpo(
       `/api/linhas?termo=${encodeURIComponent(termo)}`,
     );
     if (!Array.isArray(dados)) {
@@ -65,8 +103,18 @@ export const api = {
     return linhas;
   },
 
-  posicoes(codigoLinha: number): Promise<PosicoesDaLinha> {
-    return obterJson(`/api/posicoes/${codigoLinha}`);
+  async posicoes(
+    codigoLinha: number,
+    opcoes: { readonly sinal?: AbortSignal } = {},
+  ): Promise<PosicoesDaLinha> {
+    const init =
+      opcoes.sinal !== undefined ? { signal: opcoes.sinal } : undefined;
+    const corpo = await obterCorpo(`/api/posicoes/${codigoLinha}`, init);
+    const dados = paraPosicoes(corpo);
+    if (dados === null) {
+      throw new ErroApi("resposta de posições inválida");
+    }
+    return dados;
   },
 
   async salvarToken(token: string): Promise<boolean> {

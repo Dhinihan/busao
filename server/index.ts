@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
-import { linhasDemo, posicoesDemo } from "./demo";
+import { linhasDemo, posicoesDemo } from "./demo.ts";
 import {
   buscarLinhas,
   definirAoAutenticar,
@@ -9,13 +9,13 @@ import {
   limparSessao,
   posicoesDaLinha,
   validarToken,
-} from "./olhovivo";
+} from "./olhovivo.ts";
 import {
   apagarToken,
   lerEstado,
   marcarValidadoSeAtual,
   salvarToken,
-} from "./token-store";
+} from "./token-store.ts";
 
 const DEMO = process.env["DEMO"] === "1";
 const PORTA = Number(process.env["PORT"] ?? 8787);

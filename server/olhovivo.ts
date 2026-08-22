@@ -1,4 +1,4 @@
-import { lerEstado } from "./token-store";
+import { lerEstado } from "./token-store.ts";
 
 const API_BASE = "https://api.olhovivo.sptrans.com.br/v2.1";
 
@@ -126,7 +126,7 @@ export async function validarToken(token: string): Promise<boolean> {
   }
 }
 
-function paraLinha(bruto: unknown): Linha | null {
+export function paraLinha(bruto: unknown): Linha | null {
   if (typeof bruto !== "object" || bruto === null) return null;
   const id = campoDe(bruto, "cl");
   const parte1 = campoDe(bruto, "lt");
@@ -160,7 +160,7 @@ export async function buscarLinhas(termo: string): Promise<readonly Linha[]> {
   return linhas;
 }
 
-function paraPosicoes(bruto: unknown): PosicoesDaLinha | null {
+export function paraPosicoes(bruto: unknown): PosicoesDaLinha | null {
   if (typeof bruto !== "object" || bruto === null) return null;
   const horarioBruto = campoDe(bruto, "hr");
   const veiculosBrutos = campoDe(bruto, "vs");
