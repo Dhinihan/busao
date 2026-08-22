@@ -91,7 +91,9 @@ if (process.env["NODE_ENV"] === "production") {
   app.use("*", serveStatic({ root: "./dist" }));
 }
 
-serve({ fetch: app.fetch, port: PORTA }, () => {
+serve(
+  { fetch: app.fetch, port: PORTA, hostname: "127.0.0.1" },
+  () => {
   console.info(
     `busão · servidor pronto na porta ${PORTA}${DEMO ? " · modo demonstração" : ""}`,
   );
