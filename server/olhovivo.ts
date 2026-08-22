@@ -148,13 +148,13 @@ export function paraLinha(bruto: unknown): Linha | null {
       ? parte2
       : "";
   const sentidoVolta = campoDe(bruto, "sl") === 2;
-  const origem = sentidoVolta ? secundario : primario;
-  const destino = sentidoVolta ? primario : secundario;
-  const trechos = [origem, destino].filter(ehTexto).filter((t) => t !== "");
+  const destino = (sentidoVolta ? [primario, secundario] : [secundario, primario])
+    .filter(ehTexto)
+    .find((t) => t !== "");
   return {
     id,
     letreiro: sufixo === "" ? parte1 : `${parte1}-${sufixo}`,
-    descricao: trechos.join(" → "),
+    descricao: destino ?? "",
   };
 }
 

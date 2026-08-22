@@ -6,11 +6,11 @@ import { mensagemDeErro } from "../src/api.ts";
 test("paraLinha mapeia um registro completo", () => {
   assert.deepEqual(
     paraLinha({ cl: 1234, lt: "8000", tl: 10, tp: "Term. A", ts: "Term. B" }),
-    { id: 1234, letreiro: "8000-10", descricao: "Term. A → Term. B" },
+    { id: 1234, letreiro: "8000-10", descricao: "Term. B" },
   );
 });
 
-test("paraLinha espelha origem e destino conforme o sentido", () => {
+test("paraLinha troca o destino conforme o sentido", () => {
   const ida = paraLinha({
     cl: 1877,
     lt: "8700",
@@ -19,7 +19,7 @@ test("paraLinha espelha origem e destino conforme o sentido", () => {
     tp: "PÇA. RAMOS DE AZEVEDO",
     ts: "TERM. CAMPO LIMPO",
   });
-  assert.equal(ida?.descricao, "PÇA. RAMOS DE AZEVEDO → TERM. CAMPO LIMPO");
+  assert.equal(ida?.descricao, "TERM. CAMPO LIMPO");
   const volta = paraLinha({
     cl: 34645,
     lt: "8700",
@@ -28,7 +28,7 @@ test("paraLinha espelha origem e destino conforme o sentido", () => {
     tp: "PÇA. RAMOS DE AZEVEDO",
     ts: "TERM. CAMPO LIMPO",
   });
-  assert.equal(volta?.descricao, "TERM. CAMPO LIMPO → PÇA. RAMOS DE AZEVEDO");
+  assert.equal(volta?.descricao, "PÇA. RAMOS DE AZEVEDO");
 });
 
 test("paraLinha aceita tl numérico ou textual", () => {
