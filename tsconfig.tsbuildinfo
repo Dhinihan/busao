@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/api.ts","./src/hooks.ts","./src/main.tsx","./src/types.ts","./src/components/Estrela.tsx","./src/components/Mapa.tsx","./src/components/Wizard.tsx","./server/demo.ts","./server/index.ts","./server/olhovivo.ts","./server/token-store.ts","./vite.config.ts"],"version":"5.9.3"}
