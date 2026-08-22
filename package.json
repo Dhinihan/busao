@@ -7,7 +7,7 @@
     "dev": "concurrently -k -n srv,web -c yellow,cyan \"tsx watch server/index.ts\" \"vite\"",
     "build": "tsc -b && vite build",
     "start": "NODE_ENV=production tsx server/index.ts",
-    "test": "node --test tests/parsers.test.ts",
+    "test": "node --test tests/parsers.test.ts tests/requisicao.test.ts tests/api-cliente.test.ts",
     "typecheck": "tsc -b"
   },
   "dependencies": {

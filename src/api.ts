@@ -66,18 +66,32 @@ function ehLinha(valor: unknown): valor is Linha {
 
 function paraPosicoes(bruto: unknown): PosicoesDaLinha | null {
   if (typeof bruto !== "object" || bruto === null) return null;
-  if (!("vs" in bruto) || !Array.isArray(bruto.vs)) return null;
+  if (!("horario" in bruto) || typeof bruto.horario !== "string") return null;
+  if (!("veiculos" in bruto) || !Array.isArray(bruto.veiculos)) return null;
   const veiculos: PosicaoVeiculo[] = [];
-  for (const item of bruto.vs) {
-    if (typeof item !== "object" || item === null) continue;
-    if (!("p" in item) || typeof item.p !== "string") continue;
-    if (!("py" in item) || typeof item.py !== "number") continue;
-    if (!("px" in item) || typeof item.px !== "number") continue;
-    const acessivel = "a" in item && item.a === true;
-    veiculos.push({ prefixo: item.p, lat: item.py, lng: item.px, acessivel });
+  for (const item of bruto.veiculos) {
+    if (
+      typeof item !== "object" ||
+      item === null ||
+      !("prefixo" in item) ||
+      typeof item.prefixo !== "string" ||
+      !("lat" in item) ||
+      typeof item.lat !== "number" ||
+      !("lng" in item) ||
+      typeof item.lng !== "number" ||
+      !("acessivel" in item) ||
+      typeof item.acessivel !== "boolean"
+    ) {
+      continue;
+    }
+    veiculos.push({
+      prefixo: item.prefixo,
+      lat: item.lat,
+      lng: item.lng,
+      acessivel: item.acessivel,
+    });
   }
-  const horario = "hr" in bruto && typeof bruto.hr === "string" ? bruto.hr : "";
-  return { horario, veiculos };
+  return { horario: bruto.horario, veiculos };
 }
 
 export const api = {
