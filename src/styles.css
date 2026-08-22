@@ -449,6 +449,53 @@ button {
   color: var(--tinta-fraca);
 }
 
+.mapa__acoes {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 650;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.botao-mapa {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--papel);
+  color: var(--tinta);
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  box-shadow: 0 2px 10px rgba(23, 24, 26, 0.18);
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.botao-mapa:hover {
+  border-color: var(--ambar-escura);
+}
+
+.botao-mapa--ativo {
+  border-color: var(--verde-vivo);
+  color: var(--verde-vivo);
+}
+
+.mapa__aviso {
+  margin: 0;
+  max-width: 230px;
+  background: var(--papel);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(23, 24, 26, 0.12);
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--vermelho);
+}
+
 /* ── wizard ───────────────────────────────────────────────── */
 
 .wizard__fundo {

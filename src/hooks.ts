@@ -145,3 +145,53 @@ export function usePosicoes(idLinha: number | null): EstadoPosicoes {
 
   return estado;
 }
+
+export type EstadoLocalizacao = {
+  readonly ponto: readonly [number, number] | null;
+  readonly erro: string | null;
+};
+
+const SEM_LOCALIZACAO: EstadoLocalizacao = { ponto: null, erro: null };
+
+function mensagemDeGeolocalizacao(erro: GeolocationPositionError): string {
+  if (erro.code === erro.PERMISSION_DENIED)
+    return "permissão de localização negada";
+  if (erro.code === erro.POSITION_UNAVAILABLE)
+    return "localização indisponível agora";
+  return "não foi possível obter sua localização";
+}
+
+export function useLocalizacao(): {
+  readonly estado: EstadoLocalizacao;
+  readonly ativa: boolean;
+  readonly alternar: () => void;
+} {
+  const [estado, setEstado] = useState<EstadoLocalizacao>(SEM_LOCALIZACAO);
+  const [ativa, setAtiva] = useState(false);
+
+  useEffect(() => {
+    if (!ativa) return;
+    if (!("geolocation" in navigator)) {
+      setEstado({ ponto: null, erro: "seu navegador não tem localização" });
+      setAtiva(false);
+      return;
+    }
+    const id = navigator.geolocation.watchPosition(
+      (posicao) =>
+        setEstado({
+          ponto: [posicao.coords.latitude, posicao.coords.longitude],
+          erro: null,
+        }),
+      (erro) => setEstado({ ponto: null, erro: mensagemDeGeolocalizacao(erro) }),
+      { enableHighAccuracy: true, maximumAge: 5_000, timeout: 15_000 },
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, [ativa]);
+
+  const alternar = useCallback(() => {
+    setEstado(SEM_LOCALIZACAO);
+    setAtiva((v) => !v);
+  }, []);
+
+  return { estado, ativa, alternar };
+}

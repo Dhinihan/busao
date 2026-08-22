@@ -8,6 +8,7 @@ import {
   useMap,
 } from "react-leaflet";
 import type { EstadoPosicoes } from "../hooks";
+import { useLocalizacao } from "../hooks";
 import type { Linha, PosicaoVeiculo } from "../types";
 
 function paraPonto(v: PosicaoVeiculo): [number, number] {
@@ -35,10 +36,29 @@ function AjusteLimites(props: {
   return null;
 }
 
+function IrAte(props: { ponto: readonly [number, number] | null }) {
+  const mapa = useMap();
+  const centralizado = useRef(false);
+  const { ponto } = props;
+
+  useEffect(() => {
+    if (ponto === null) {
+      centralizado.current = false;
+      return;
+    }
+    if (centralizado.current) return;
+    centralizado.current = true;
+    mapa.setView([...ponto], Math.max(mapa.getZoom(), 16), { animate: true });
+  }, [ponto, mapa]);
+
+  return null;
+}
+
 export function Mapa(props: { linha: Linha | null; estado: EstadoPosicoes }) {
   const { linha, estado } = props;
   const veiculos = estado.dados?.veiculos ?? [];
   const pontos = veiculos.map(paraPonto);
+  const localizacao = useLocalizacao();
 
   return (
     <section className="mapa" aria-label="Mapa com as posições dos ônibus">
@@ -70,8 +90,49 @@ export function Mapa(props: { linha: Linha | null; estado: EstadoPosicoes }) {
             </Tooltip>
           </CircleMarker>
         ))}
+        {localizacao.estado.ponto !== null && (
+          <CircleMarker
+            center={[...localizacao.estado.ponto]}
+            radius={8}
+            pathOptions={{
+              color: "#fbfbfa",
+              weight: 3,
+              fillColor: "#1a73e8",
+              fillOpacity: 1,
+            }}
+          >
+            <Tooltip direction="top" offset={[0, -10]}>
+              você está aqui
+            </Tooltip>
+          </CircleMarker>
+        )}
+        <IrAte ponto={localizacao.estado.ponto} />
         {linha !== null && <AjusteLimites chave={linha.id} pontos={pontos} />}
       </MapContainer>
+
+      <div className="mapa__acoes">
+        <button
+          type="button"
+          className={
+            "botao-mapa" + (localizacao.ativa ? " botao-mapa--ativo" : "")
+          }
+          aria-pressed={localizacao.ativa}
+          onClick={localizacao.alternar}
+        >
+          {localizacao.ativa ? (
+            <>
+              <span className="vivo" aria-hidden="true" /> rastreando você
+            </>
+          ) : (
+            "onde estou"
+          )}
+        </button>
+        {localizacao.estado.erro !== null && (
+          <p className="mapa__aviso" role="status">
+            {localizacao.estado.erro}
+          </p>
+        )}
+      </div>
 
       {linha === null && (
         <div className="mapa__vazio">
