@@ -96,7 +96,7 @@ export function Wizard(props: {
     setEnviando(true);
     setErro(null);
     try {
-      const validado = await api.salvarToken(token.trim());
+      const validado = await salvarComTentativas(token.trim());
       if (validado) {
         props.aoConcluir();
       } else {
@@ -111,10 +111,26 @@ export function Wizard(props: {
       setErro(
         excecao instanceof ErroApi
           ? excecao.message
-          : "não foi possível validar o token agora",
+          : "não consegui falar com o servidor — confira se este dispositivo " +
+            "está na sua rede do Tailscale e tente de novo",
       );
     } finally {
       setEnviando(false);
+    }
+  }
+
+  async function salvarComTentativas(
+    tokenLimpo: string,
+    tentativasRestantes = 2,
+  ): Promise<boolean> {
+    try {
+      return await api.salvarToken(tokenLimpo);
+    } catch (excecao) {
+      if (excecao instanceof ErroApi || tentativasRestantes <= 1) {
+        throw excecao;
+      }
+      await new Promise((resolver) => setTimeout(resolver, 800));
+      return salvarComTentativas(tokenLimpo, tentativasRestantes - 1);
     }
   }
 
