@@ -91,8 +91,12 @@ async function requisitar(caminho: string): Promise<unknown> {
   if (token === null) throw new ErroOlhoVivo("token da SPTrans não configurado");
 
   for (let tentativa = 0; tentativa < 2; tentativa += 1) {
-    let atual = sessao;
-    if (atual === null || atual.token !== token) {
+    const existente = sessao;
+    const reutilizada = existente !== null && existente.token === token;
+    let atual: Sessao;
+    if (reutilizada) {
+      atual = existente;
+    } else {
       atual = await entrar(token);
       sessao = atual;
     }
@@ -104,7 +108,11 @@ async function requisitar(caminho: string): Promise<unknown> {
     } catch (causa) {
       throw new ErroOlhoVivo("sem contato com a API da SPTrans", { cause: causa });
     }
-    if (resposta.status === 401 || resposta.status === 403) {
+    const sessaoSuspeita =
+      resposta.status === 401 ||
+      resposta.status === 403 ||
+      (resposta.status === 404 && reutilizada);
+    if (sessaoSuspeita) {
       sessao = null;
       continue;
     }
@@ -149,7 +157,7 @@ export function paraLinha(bruto: unknown): Linha | null {
 
 export async function buscarLinhas(termo: string): Promise<readonly Linha[]> {
   const dados = await requisitar(
-    `/Linha/Buscar?termo=${encodeURIComponent(termo)}`,
+    `/Linha/Buscar?termosBusca=${encodeURIComponent(termo)}`,
   );
   if (!Array.isArray(dados)) return [];
   const linhas: Linha[] = [];
