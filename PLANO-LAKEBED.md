@@ -480,3 +480,37 @@ checklist da Etapa 3. Não executar deploy no clone fresco antes de recriar o en
 - Sign-in com Google
 - Pipeline de CI/CD (credencial de CLI existe se quiser depois)
 - Modo demonstração
+
+---
+
+## Resultado do spike hospedado · 2026-08-23 · NO-GO
+
+Executado em 2026-08-23 com `lakebed@0.0.29`, conta autenticada (deploy próprio
+`dep_kujltk6syxQG5gXK`, URL `https://lucky-ridge-3d0fdce943.lakebed.app`).
+
+Confirmado funcionando no hospedado:
+
+- env server-only (`ctx.env`) e outbound `fetch` habilitados;
+- login SPTrans lê o cookie via fallback `headers.get("set-cookie")`
+  (`headers.getSetCookie()` não existe no runtime hospedado — risco confirmado);
+- busca e posições com dados reais; contrato 400/502/500 preservado;
+- tiles OSM e geolocalização funcionam no client da capsule (screenshot);
+- inspeção privada (`Policy: private`) e token ausente do bundle;
+- deploy pertence à conta desde o primeiro push (`Expires: never`, sem claim).
+
+Gates reprovados:
+
+1. **Cota**: limite publicado de **10.000 requests/dia** por deploy. Projeção de uso
+   normal (10 usuários × 3 h, polling ~10 s + buscas + status) dá **~10.100–11.000
+   requests/dia** — acima ou no limite. O cache reduz upstream, não inbound.
+   Regra do plano: cota abaixo da projeção ⇒ NO-GO sem introduzir rate limit,
+   login ou mudança de polling.
+2. **Estado**: módulo não preserva sessão/cache entre requests hospedados
+   (~1,3–1,8 s por request mesmo repetido; re-login SPTrans por request).
+   Funcional, mas cada poll custa um login upstream — insustentável dentro da
+   cota e arriscado com a SPTrans. Logs de aplicação (`ctx.log`) não aparecem em
+   `lakebed logs` no hospedado, então a observação foi por latência.
+
+Etapa 3 (cliente completo), 4 (domínio) e 5 (limpeza) não executadas. Rollback:
+tag `pre-lakebed`. O teste representativo de 10 usuários não rodou: queimaria a
+cota diária sem mudar o veredito já dado pelo limite publicado.
