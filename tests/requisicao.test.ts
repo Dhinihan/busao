@@ -4,6 +4,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import {
   criarClienteOlhoVivo,
   ErroOlhoVivo,
+  interpretarSessao,
   type ClienteOlhoVivo,
   type Sessao,
 } from "../server/olhovivo.ts";
@@ -16,8 +17,14 @@ function respostaFake(opcoes: {
   status: number;
   corpo?: unknown;
   comCookie?: boolean;
+  cookie?: string;
 }): Response {
-  const { status, corpo = "", comCookie = false } = opcoes;
+  const {
+    status,
+    corpo = "",
+    comCookie = false,
+    cookie = "apiCredentials=falso",
+  } = opcoes;
   return {
     ok: status >= 200 && status < 300,
     status,
@@ -25,7 +32,7 @@ function respostaFake(opcoes: {
     json: async () => corpo,
     headers: {
       getSetCookie: () =>
-        comCookie ? ["apiCredentials=falso; path=/; HttpOnly"] : [],
+        comCookie ? [`${cookie}; path=/; HttpOnly`] : [],
     },
   } as unknown as Response;
 }
@@ -138,7 +145,7 @@ test("401 segue re-autenticando e esgota com sessão expirada", async () => {
 });
 
 test("hooks de sessão externalizam o cookie e evitam re-login", async () => {
-  const loja: { atual: Sessao | null } = { atual: null };
+  const loja: { atual: string | null } = { atual: null };
   let leituras = 0;
   const clienteExterno = criarClienteOlhoVivo({
     obterToken: async () => TOKEN_FIXO,
@@ -147,7 +154,7 @@ test("hooks de sessão externalizam o cookie e evitam re-login", async () => {
       return loja.atual;
     },
     gravarSessao: async (sessao) => {
-      loja.atual = sessao;
+      loja.atual = JSON.stringify(sessao);
     },
   });
 
@@ -156,9 +163,57 @@ test("hooks de sessão externalizam o cookie e evitam re-login", async () => {
   await clienteExterno.buscarLinhas("Campo");
 
   assert.equal(leituras, 2);
-  assert.equal(loja.atual?.cookie, "apiCredentials=falso");
+  assert.deepEqual(interpretarSessao(loja.atual), {
+    token: TOKEN_FIXO,
+    cookie: "apiCredentials=falso",
+  });
   const logins = chamadas.filter((c) => c.metodo === "POST").length;
-  assert.equal(logins, 1, "segundo request reutilizou a sessão externa");
+  assert.equal(logins, 1, "segundo request reutilizou a sessão serializada");
+});
+
+test("cookie expirado ignora o valor persistido e grava a nova sessão", async () => {
+  const cookieExpirado = "apiCredentials=expirado";
+  const cookieNovo = "apiCredentials=novo";
+  let persistido: string | null = JSON.stringify({
+    token: TOKEN_FIXO,
+    cookie: cookieExpirado,
+  });
+  let logins = 0;
+  const cookiesEnviados: string[] = [];
+
+  const clienteExterno = criarClienteOlhoVivo({
+    obterToken: async () => TOKEN_FIXO,
+    lerSessao: async () => persistido,
+    gravarSessao: async (sessao) => {
+      persistido = JSON.stringify(sessao);
+    },
+    buscar: async (entrada, init) => {
+      const url = new URL(String(entrada));
+      if ((init?.method ?? "GET") === "POST") {
+        logins += 1;
+        return respostaFake({
+          status: 200,
+          corpo: "true",
+          comCookie: true,
+          cookie: cookieNovo,
+        });
+      }
+      const cookie = new Headers(init?.headers).get("cookie");
+      if (cookie !== null) cookiesEnviados.push(cookie);
+      if (cookie === cookieExpirado) return dados401();
+      if (cookie === cookieNovo) return dados200();
+      throw new Error(`cookie inesperado para ${url.pathname}`);
+    },
+  });
+
+  assert.equal((await clienteExterno.buscarLinhas("Campo")).length, 1);
+  assert.equal((await clienteExterno.buscarLinhas("Campo")).length, 1);
+  assert.equal(logins, 1);
+  assert.deepEqual(cookiesEnviados, [cookieExpirado, cookieNovo, cookieNovo]);
+  assert.deepEqual(interpretarSessao(persistido), {
+    token: TOKEN_FIXO,
+    cookie: cookieNovo,
+  });
 });
 
 test("sessão externa de outro token é descartada e refaz login", async () => {

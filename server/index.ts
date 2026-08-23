@@ -2,6 +2,7 @@ import { capsule, endpoint, json, string, table } from "lakebed/server";
 import {
   criarClienteOlhoVivo,
   ErroOlhoVivo,
+  interpretarSessao,
   type Sessao,
 } from "./olhovivo.ts";
 import { criarCachePosicoes } from "./cache-posicoes.ts";
@@ -54,23 +55,15 @@ async function lerLinha(chave: string): Promise<{ id: unknown; valor: unknown } 
     .first();
 }
 
-function interpretarSessao(valor: unknown): Sessao | null {
-  if (
-    typeof valor === "object" &&
-    valor !== null &&
-    "token" in valor &&
-    typeof valor.token === "string" &&
-    "cookie" in valor &&
-    typeof valor.cookie === "string"
-  ) {
-    return { token: valor.token, cookie: valor.cookie };
-  }
-  return null;
-}
-
 async function lerSessaoDb(): Promise<Sessao | null> {
-  const linha = await lerLinha("sessao");
-  return linha === null ? null : interpretarSessao(linha.valor);
+  try {
+    const linha = await lerLinha("sessao");
+    return linha === null ? null : interpretarSessao(linha.valor);
+  } catch (erro) {
+    const nome = erro instanceof Error ? erro.name : typeof erro;
+    logAtual.info("estado: leitura ignorada", { chave: "sessao", tipo: nome });
+    return null;
+  }
 }
 
 async function gravarLinha(
@@ -79,8 +72,8 @@ async function gravarLinha(
 ): Promise<void> {
   const db = dbAtual;
   if (db === null) return;
-  const existente = await lerLinha(chave);
   try {
+    const existente = await lerLinha(chave);
     if (existente === null) {
       await db.estado.insert({ chave, valor });
     } else {

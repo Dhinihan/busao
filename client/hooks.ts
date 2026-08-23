@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { api, ErroApi } from "./api";
 import { ehLinha } from "../shared/parsers.ts";
 import type { Linha, PosicoesDaLinha } from "../shared/tipos.ts";
@@ -78,6 +78,9 @@ const ESTADO_INICIAL: EstadoPosicoes = {
 
 export function usePosicoes(idLinha: number | null): EstadoPosicoes {
   const [estado, setEstado] = useState<EstadoPosicoes>(ESTADO_INICIAL);
+  const linhaRenderizada = useRef(idLinha);
+  const mudouLinha = linhaRenderizada.current !== idLinha;
+  linhaRenderizada.current = idLinha;
 
   useEffect(() => {
     setEstado(ESTADO_INICIAL);
@@ -131,7 +134,8 @@ export function usePosicoes(idLinha: number | null): EstadoPosicoes {
     };
   }, [idLinha]);
 
-  return estado;
+  // A nova linha precisa renderizar sem os dados da anterior antes dos efeitos rodarem.
+  return mudouLinha ? ESTADO_INICIAL : estado;
 }
 
 export type EstadoLocalizacao = {
