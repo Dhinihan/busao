@@ -19,7 +19,7 @@ antes de uso.
 ```sh
 npm install
 npx lakebed@0.0.29 dev --port 3000   # capsule completa em http://localhost:3000
-npm test                             # suíte node:test (37 testes)
+npm test                             # suíte node:test
 npm run typecheck                    # tsc estrito dos módulos testáveis
 ```
 
@@ -63,7 +63,7 @@ server/index.ts   capsule Lakebed: endpoints /api/status|linhas|posicoes,
                   sessão SPTrans no banco, cache de posições em memória
 server/olhovivo.ts    cliente Olho Vivo (login por cookie, hooks de sessão)
 tests/            node:test do contrato SPTrans, cache, tile-math e api cliente
-PLANO-LAKEBED.md  plano de migração e registros das etapas
+docs/lakebed.md   restrições, limites e comportamento do runtime Lakebed
 ```
 
 O mapa é renderizado sem bibliotecas (tiles OSM + matemática própria em
