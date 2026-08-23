@@ -566,3 +566,49 @@ não é confirmável pela superfície atual. Limite efetivo segue sendo
 Veredito para Etapa 3+: prosseguir com sessão no DB + cache em memória. Os
 500 sob rajadas simultâneas são tolerados pelo cliente (mantém últimas posições
 e repete em 10 s) e não ocorrem no padrão real de uso.
+
+## Resultado da Etapa 3 · 2026-08-23 · concluída
+
+- `client/`: `api.ts`, `hooks.ts`, `App.tsx`, `Mapa.tsx`, `Estrela.tsx`,
+  `index.tsx` (Preact). Busca com debounce 350 ms via `onInput` — em Preact
+  `onChange` é o evento nativo `change` e só dispara no blur.
+- Mapa slippy da etapa 1 com enquadramento único por linha (primeira chegada de
+  posições) e centralização única por ativação do rastreio (zoom ≥ 16).
+- Status reduzido a `{ configurado }`; Wizard/demo/validado removidos; mensagem
+  de chave recusada preservada em `shared/mensagens.ts`. `StatusApi` simplificado
+  em shared; legado `src/` segue intacto para a Etapa 5.
+- Suíte: 37 testes pass; typecheck limpo (`client/api.ts` e `client/hooks.ts`
+  agora no tsconfig testável).
+- Smoke local em Chromium headless contra `lakebed dev`: 25 checagens cobrindo
+  o checklist da seção Etapa 3 (busca número/nome, termo curto, troca de linha,
+  polling pausa/retoma, falha transitória preserva últimos ônibus, requests
+  sem sobreposição, favoritas entre abas, rastreio persistente, permissão
+  negada, 375 px).
+
+## Resultado da Etapa 4 · 2026-08-23 · concluída
+
+- Deploy final: `dep_kujltk6syxQG5gXK`
+  (`https://lucky-ridge-3d0fdce943.lakebed.app`), sem `--public-inspect`.
+- Domínio: **https://busao.lakebed.app** registrado e vinculado ao mesmo deploy
+  (`Domains:` visível no inspect).
+- Verificação hospedada: status/linhas/posicoes 200, validação 400, HTML servido
+  na raiz, token ausente do bundle client, inspeção privada (inspect exige auth;
+  forma `lakebed inspect <deployId>` funciona do diretório da capsule).
+- Smoke completo do checklist da Etapa 3 rodado contra a produção: 21/22 direto
+  (o único FAIL foi timing do teste, 1,2 s de espera para resposta que leva
+  ~1,4 s) e retestado com espera explícita pela resposta ⇒ PASS. Total 25/25.
+- Linha de base observada (hospedado): piso do runtime ≈ 1,0–1,1 s; poll com
+  sessão válida ≈ 1,4–1,6 s; busca ≈ 1,5 s. Sob colisão deliberada
+  (12 buscas × 20 polls concorrentes): 0 falhas.
+- Limitação conhecida: 500 esporádico possível quando dois requests tocam o DB
+  em janelas desfavoráveis (transação do endpoint cobre o handler inteiro,
+  incluindo fetch upstream; lock timeout da plataforma). Observado uma vez
+  durante o smoke; cliente tolera e repete. Sem rate limit de aplicação,
+  conforme plano.
+
+## Pendência da Etapa 5
+
+Apagar legado (`src/`, `server/token-store.ts`+`server/demo.ts` já fora,
+`index.html`, `vite.config.ts`, `data/`, `dist/`, `scratch/`), limpar
+dependências do package.json e revisar linhas mortas `pos:*` no DB do deploy
+(restaram 4 entradas dos experimentos de cache em DB; inofensivas, nunca lidas).
