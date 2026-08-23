@@ -45,6 +45,9 @@ function respostaDeErro(erro: unknown) {
   if (erro instanceof ErroOlhoVivo) {
     return json({ erro: erro.message }, { status: 502 });
   }
+  const nome = erro instanceof Error ? erro.name : typeof erro;
+  const mensagem = erro instanceof Error ? erro.message : String(erro);
+  logAtual.info("erro interno", { tipo: nome, mensagem });
   return json({ erro: "erro interno do servidor" }, { status: 500 });
 }
 

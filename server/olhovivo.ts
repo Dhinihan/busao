@@ -23,7 +23,21 @@ export type ClienteOlhoVivo = {
   readonly descartarSessao: () => void;
 };
 
-function campoCookie(bruto: string | undefined): string | null {
+function campoCookie(resposta: Response): string | null {
+  const comGetSetCookie = resposta.headers as Headers & {
+    getSetCookie?: () => string[];
+  };
+  const brutos =
+    typeof comGetSetCookie.getSetCookie === "function"
+      ? comGetSetCookie.getSetCookie()
+      : [];
+  const direto = campoDeTexto(brutos[0]);
+  if (direto !== null) return direto;
+  const combinado = resposta.headers.get("set-cookie");
+  return campoDeTexto(combinado === null ? undefined : combinado.split(/,(?=[^;,]+?=)/)[0]);
+}
+
+function campoDeTexto(bruto: string | undefined): string | null {
   const cookie = bruto === undefined ? undefined : bruto.split(";")[0]?.trim();
   return cookie === undefined || cookie === "" ? null : cookie;
 }
@@ -51,9 +65,7 @@ export function criarClienteOlhoVivo(opcoes: {
       if (resposta.ok && corpo === "false") throw new TokenInvalidoError();
       throw new ErroOlhoVivo(`autenticação falhou (HTTP ${resposta.status})`);
     }
-    const cookie = campoCookie(
-      resposta.headers.getSetCookie()[0] as string | undefined,
-    );
+    const cookie = campoCookie(resposta);
     if (cookie === null) {
       throw new ErroOlhoVivo("autenticação não devolveu cookie de sessão");
     }
