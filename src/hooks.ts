@@ -161,13 +161,23 @@ function mensagemDeGeolocalizacao(erro: GeolocationPositionError): string {
   return "não foi possível obter sua localização";
 }
 
+const CHAVE_RASTREAMENTO = "busao:rastreamento";
+
+function lerRastreamentoInicial(): boolean {
+  try {
+    return localStorage.getItem(CHAVE_RASTREAMENTO) !== "off";
+  } catch {
+    return true;
+  }
+}
+
 export function useLocalizacao(): {
   readonly estado: EstadoLocalizacao;
   readonly ativa: boolean;
   readonly alternar: () => void;
 } {
   const [estado, setEstado] = useState<EstadoLocalizacao>(SEM_LOCALIZACAO);
-  const [ativa, setAtiva] = useState(false);
+  const [ativa, setAtiva] = useState(lerRastreamentoInicial);
 
   useEffect(() => {
     if (!ativa) return;
@@ -190,7 +200,15 @@ export function useLocalizacao(): {
 
   const alternar = useCallback(() => {
     setEstado(SEM_LOCALIZACAO);
-    setAtiva((v) => !v);
+    setAtiva((v) => {
+      const proximo = !v;
+      try {
+        localStorage.setItem(CHAVE_RASTREAMENTO, proximo ? "on" : "off");
+      } catch {
+        /* preferência é opcional */
+      }
+      return proximo;
+    });
   }, []);
 
   return { estado, ativa, alternar };
