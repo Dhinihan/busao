@@ -23,11 +23,7 @@ export function ehStatus(valor: unknown): valor is StatusApi {
     typeof valor === "object" &&
     valor !== null &&
     "configurado" in valor &&
-    typeof valor.configurado === "boolean" &&
-    "demo" in valor &&
-    typeof valor.demo === "boolean" &&
-    "validado" in valor &&
-    typeof valor.validado === "boolean"
+    typeof valor.configurado === "boolean"
   );
 }
 

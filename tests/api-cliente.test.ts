@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 
-import { ErroApi, api } from "../src/api.ts";
+import { ErroApi, api } from "../client/api.ts";
 
 const fetchOriginal = globalThis.fetch;
 

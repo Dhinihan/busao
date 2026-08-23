@@ -7,7 +7,8 @@
     "shared",
     "server/olhovivo.ts",
     "server/cache-posicoes.ts",
-    "src/api.ts",
+    "client/api.ts",
+    "client/hooks.ts",
     "tests"
   ]
 }
