@@ -38,8 +38,10 @@ test("zoom 0 cobre o mundo com um único tile", () => {
     altura: TILE_SIZE,
   });
   assert.equal(tiles.length, 1);
+  const unica = tiles[0];
+  assert.ok(unica !== undefined);
   assert.deepEqual(
-    { z: tiles[0].z, x: tiles[0].x, y: tiles[0].y },
+    { z: unica.z, x: unica.x, y: unica.y },
     { z: 0, x: 0, y: 0 },
   );
 });

@@ -79,7 +79,12 @@ export function tilesVisiveis(opcoes: {
 
 export function pontoParaPixelDeTela(
   ponto: Ponto,
-  opcoes: { readonly centro: Ponto; readonly zoom: number },
+  opcoes: {
+    readonly centro: Ponto;
+    readonly zoom: number;
+    readonly largura: number;
+    readonly altura: number;
+  },
 ): Pixel {
   const centroPixel = mundoEmPixel(opcoes.centro, opcoes.zoom);
   const pontoPixel = mundoEmPixel(ponto, opcoes.zoom);

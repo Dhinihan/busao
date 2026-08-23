@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": [
+    "shared",
+    "server/olhovivo.ts",
+    "server/cache-posicoes.ts",
+    "src/api.ts",
+    "tests"
+  ]
+}

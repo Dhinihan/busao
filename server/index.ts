@@ -1,119 +1,91 @@
-import { serve } from "@hono/node-server";
-import { serveStatic } from "@hono/node-server/serve-static";
-import { Hono } from "hono";
-import { linhasDemo, posicoesDemo } from "./demo.ts";
-import { criarClienteOlhoVivo, ErroOlhoVivo } from "./olhovivo.ts";
+import { capsule, endpoint, json } from "lakebed/server";
 import {
-  apagarToken,
-  lerEstado,
-  marcarValidadoSeAtual,
-  salvarToken,
-} from "./token-store.ts";
+  criarClienteOlhoVivo,
+  ErroOlhoVivo,
+  type ClienteOlhoVivo,
+} from "./olhovivo.ts";
+import { criarCachePosicoes } from "./cache-posicoes.ts";
+import {
+  MENSAGEM_LINHA_INVALIDA,
+  MENSAGEM_TERMO_CURTO,
+  idLinhaValido,
+  termoValido,
+} from "../shared/validadores.ts";
 
-const DEMO = process.env["DEMO"] === "1";
-const PORTA = Number(process.env["PORT"] ?? 8787);
+type LogLakebed = {
+  info: (mensagem: string, extras?: Record<string, unknown>) => void;
+};
 
-const olhovivo = criarClienteOlhoVivo({
-  obterToken: async () => (await lerEstado()).token,
-  aoAutenticar: (token) => {
-    void marcarValidadoSeAtual(token).catch(() => {});
+const logMudo: LogLakebed = { info: () => {} };
+
+let tokenAtual: string | null = null;
+let logAtual: LogLakebed = logMudo;
+
+const olhovivo: ClienteOlhoVivo = criarClienteOlhoVivo({
+  obterToken: async () => tokenAtual,
+  aoAutenticar: () => {
+    logAtual.info("olhovivo relogin");
   },
 });
 
-const app = new Hono();
-
-app.onError((erro, c) => {
-  if (erro instanceof ErroOlhoVivo) {
-    return c.json({ erro: erro.message }, 502);
-  }
-  console.error(erro);
-  return c.json({ erro: "erro interno do servidor" }, 500);
+const cachePosicoes = criarCachePosicoes({
+  buscar: (linhaId) => olhovivo.posicoesDaLinha(linhaId),
+  aoRegistrar: (linhaId, resultado) => {
+    logAtual.info("cache", { linhaId, resultado });
+  },
 });
 
-app.get("/api/status", async (c) => {
-  if (DEMO) {
-    return c.json({ configurado: false, demo: true, validado: false });
-  }
-  const estado = await lerEstado();
-  return c.json({
-    configurado: estado.token !== null,
-    demo: false,
-    validado: estado.validadoDesde !== null,
-  });
-});
-
-app.post("/api/token", async (c) => {
-  const corpo: unknown = await c.req.json().catch(() => null);
-  const bruto =
-    typeof corpo === "object" &&
-    corpo !== null &&
-    "token" in corpo &&
-    typeof corpo.token === "string"
-      ? corpo.token.trim()
-      : "";
-  if (bruto.length < 16) {
-    return c.json(
-      { erro: "cole o token completo que a SPTrans enviou por e-mail" },
-      400,
-    );
-  }
-  let validado = false;
-  try {
-    validado = await olhovivo.validar(bruto);
-  } catch {
-    validado = false;
-  }
-  await salvarToken(bruto, validado ? new Date().toISOString() : null);
-  return c.json({ validado });
-});
-
-app.delete("/api/token", async (c) => {
-  olhovivo.descartarSessao();
-  await apagarToken();
-  return c.body(null, 204);
-});
-
-app.get("/api/linhas", async (c) => {
-  const termo = (c.req.query("termo") ?? "").trim();
-  if (termo.length < 3) {
-    return c.json({ erro: "digite ao menos 3 caracteres" }, 400);
-  }
-  if (DEMO) {
-    const alvo = termo.toLowerCase();
-    return c.json(
-      linhasDemo().filter(
-        (l) =>
-          l.letreiro.toLowerCase().includes(alvo) ||
-          l.descricao.toLowerCase().includes(alvo),
-      ),
-    );
-  }
-  return c.json(await olhovivo.buscarLinhas(termo));
-});
-
-app.get("/api/posicoes/:id", async (c) => {
-  const id = Number(c.req.param("id"));
-  if (!Number.isInteger(id) || id <= 0) {
-    return c.json({ erro: "linha inválida" }, 400);
-  }
-  if (DEMO) {
-    const posicoes = posicoesDemo(id);
-    if (posicoes === null) {
-      return c.json({ erro: "linha não encontrada" }, 404);
-    }
-    return c.json(posicoes);
-  }
-  return c.json(await olhovivo.posicoesDaLinha(id));
-});
-
-if (process.env["NODE_ENV"] === "production") {
-  app.use("*", serveStatic({ root: "./dist" }));
+function preparar(ctx: { env: Record<string, string | undefined>; log: LogLakebed }): void {
+  const bruto = ctx.env["OLHOVIVO_TOKEN"];
+  tokenAtual = bruto === undefined || bruto.trim() === "" ? null : bruto.trim();
+  logAtual = ctx.log ?? logMudo;
 }
 
-serve(
-  { fetch: app.fetch, port: PORTA, hostname: "127.0.0.1" },
-  () => {
-  console.info(
-    `busão · servidor pronto na porta ${PORTA}${DEMO ? " · modo demonstração" : ""}`,
-  );
+function respostaDeErro(erro: unknown) {
+  if (erro instanceof ErroOlhoVivo) {
+    return json({ erro: erro.message }, { status: 502 });
+  }
+  return json({ erro: "erro interno do servidor" }, { status: 500 });
+}
+
+export default capsule({
+  name: "busao",
+  endpoints: {
+    status: endpoint({ method: "GET", path: "/api/status" }, async (ctx) => {
+      preparar(ctx);
+      return json({ configurado: tokenAtual !== null });
+    }),
+
+    linhas: endpoint(
+      { method: "GET", path: "/api/linhas" },
+      async (ctx, req) => {
+        preparar(ctx);
+        const termo = (req.query.get("termo") ?? "").trim();
+        if (!termoValido(termo)) {
+          return json({ erro: MENSAGEM_TERMO_CURTO }, { status: 400 });
+        }
+        try {
+          return json(await olhovivo.buscarLinhas(termo));
+        } catch (erro) {
+          return respostaDeErro(erro);
+        }
+      },
+    ),
+
+    posicoes: endpoint(
+      { method: "GET", path: "/api/posicoes" },
+      async (ctx, req) => {
+        preparar(ctx);
+        const id = Number(req.query.get("linha") ?? "");
+        if (!idLinhaValido(id)) {
+          return json({ erro: MENSAGEM_LINHA_INVALIDA }, { status: 400 });
+        }
+        try {
+          return json(await cachePosicoes.obter(id));
+        } catch (erro) {
+          return respostaDeErro(erro);
+        }
+      },
+    ),
+  },
 });
