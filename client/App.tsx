@@ -5,6 +5,26 @@ import { Mapa } from "./Mapa";
 import { useFavoritas, usePosicoes, useValorPostergado } from "./hooks";
 import type { Linha, StatusApi } from "../shared/tipos.ts";
 
+const rotulo =
+  "mb-2 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[#66696f]";
+
+function Led(props: { classe?: string; children: preact.ComponentChildren }) {
+  return (
+    <span
+      className={
+        "inline-block whitespace-nowrap rounded-lg bg-gradient-to-b from-[#201e19] to-[#131211] px-2.5 py-1.5 font-mono text-[15px] font-black uppercase tracking-[0.08em] text-[#ffb300] " +
+        "shadow-[inset_0_0_14px_rgba(255,179,0,0.16),inset_0_0_2px_rgba(255,255,255,0.07)] " +
+        (props.classe ?? "")
+      }
+    >
+      {props.children}
+    </span>
+  );
+}
+
+const pontoVivo =
+  "h-2 w-2 shrink-0 animate-pulse rounded-full motion-reduce:animate-none";
+
 export function App() {
   const [status, setStatus] = useState<StatusApi | null>(null);
   const [termoBusca, setTermoBusca] = useState("");
@@ -44,7 +64,7 @@ export function App() {
         }
       })
       .catch((excecao: unknown) => {
-        if (cancelado) return;
+        if (!cancelado) return;
         setResultados([]);
         setErroBusca(
           excecao instanceof ErroApi
@@ -65,143 +85,85 @@ export function App() {
   }
 
   return (
-    <main className="flex h-dvh flex-col bg-neutral-950 text-neutral-100">
-      <header className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
-        <span className="shrink-0 font-mono text-sm font-bold">busão·sp</span>
-        <input
-          type="search"
-          placeholder="número ou nome · ex.: 8000 ou Paulista"
-          autoComplete="off"
-          value={termoBusca}
-          onInput={(e) => setTermoBusca((e.target as HTMLInputElement).value)}
-          className="min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-sm outline-none focus:border-amber-400"
-        />
-      </header>
+    <div className="flex min-h-dvh flex-col-reverse bg-[#eceeea] text-[#191a1c] md:grid md:h-dvh md:grid-cols-[minmax(320px,380px)_1fr]">
+      <aside className="flex flex-col gap-[22px] border-t border-[#dcdedb] bg-[#fbfbfa] p-5 md:h-dvh md:overflow-y-auto md:border-r md:border-t-0">
+        <header className="flex items-center justify-between gap-2.5">
+          <Led>busão·sp</Led>
+        </header>
 
-      {status !== null && !conectado && (
-        <p className="border-b border-neutral-800 bg-neutral-900 px-3 py-1.5 text-xs text-amber-300">
-          Servidor sem token da SPTrans — as buscas não vão funcionar.
-        </p>
-      )}
-
-      {favoritas.length > 0 && (
-        <nav
-          aria-label="Linhas favoritas"
-          className="flex gap-1 overflow-x-auto border-b border-neutral-800 px-3 py-1.5"
-        >
-          {favoritas.map((f) => (
-            <span key={f.id} className="flex shrink-0 items-center">
-              <button
-                type="button"
-                className={
-                  "rounded-l px-2 py-1 font-mono text-xs " +
-                  (linhaAtiva?.id === f.id
-                    ? "bg-amber-400 text-black"
-                    : "border border-neutral-700 text-neutral-300")
-                }
-                onClick={() => selecionarLinha(f)}
-              >
-                {f.letreiro}
-              </button>
-              <button
-                type="button"
-                aria-label={`Remover ${f.letreiro} das favoritas`}
-                className={
-                  "h-[26px] rounded-r border border-l-0 px-1 text-neutral-400 " +
-                  (linhaAtiva?.id === f.id
-                    ? "border-amber-400"
-                    : "border-neutral-700")
-                }
-                onClick={() => alternar(f)}
-              >
-                <Estrela cheia />
-              </button>
-            </span>
-          ))}
-        </nav>
-      )}
-
-      <section
-        aria-live="polite"
-        className={
-          "overflow-y-auto border-b border-neutral-800 bg-neutral-900/60 " +
-          ((resultados !== null && resultados.length > 0 && !buscando) ||
-          erroBusca !== null ||
-          buscando
-            ? ""
-            : "hidden")
-        }
-      >
-        {buscando && (
-          <p className="px-3 py-2 text-xs text-neutral-400">buscando…</p>
+        {status !== null && !conectado && (
+          <p className="-mt-2 m-0 flex flex-wrap items-center gap-1.5 rounded-[10px] border border-dashed border-[#dcdedb] px-3 py-2.5 text-[13px] leading-snug text-[#66696f]">
+            <span
+              className={pontoVivo + " bg-[#a06d00]"}
+              aria-hidden="true"
+            />
+            Servidor sem token da SPTrans — as buscas não vão funcionar.
+          </p>
         )}
-        {erroBusca !== null && (
-          <p className="px-3 py-2 text-xs text-red-300">{erroBusca}</p>
-        )}
-        {resultados !== null &&
-          !buscando &&
-          resultados.length === 0 &&
-          erroBusca === null && (
-            <p className="px-3 py-2 text-xs text-neutral-400">
-              Nenhuma linha encontrada para “{termoPostergado}”.
-            </p>
-          )}
-        {resultados !== null && resultados.length > 0 && !buscando && (
-          <ul>
-            {resultados.map((l) => (
-              <li key={l.id} className="flex items-center border-b border-neutral-800/60 last:border-b-0">
-                <button
-                  type="button"
-                  className={
-                    "min-w-0 flex-1 px-3 py-2 text-left " +
-                    (linhaAtiva?.id === l.id ? "bg-neutral-800" : "")
-                  }
-                  onClick={() => selecionarLinha(l)}
-                >
-                  <span className="block font-mono text-sm text-amber-300">
-                    {l.letreiro}
-                  </span>
-                  <span className="block truncate text-xs text-neutral-400">
-                    {l.descricao}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className={
-                    "mx-2 shrink-0 " + (tem(l.id) ? "text-amber-400" : "text-neutral-500")
-                  }
-                  aria-pressed={tem(l.id)}
-                  aria-label={
-                    tem(l.id)
-                      ? `Remover ${l.letreiro} das favoritas`
-                      : `Salvar ${l.letreiro} nas favoritas`
-                  }
-                  onClick={() => alternar(l)}
-                >
-                  <Estrela cheia={tem(l.id)} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
 
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <Mapa linha={linhaAtiva} estado={estadoPosicoes} />
+        <div>
+          <label className={rotulo} htmlFor="campo-busca">
+            Buscar linha
+          </label>
+          <input
+            id="campo-busca"
+            type="search"
+            placeholder="número ou nome · ex.: 8000 ou Paulista"
+            autoComplete="off"
+            value={termoBusca}
+            onInput={(e) => setTermoBusca((e.target as HTMLInputElement).value)}
+            className="w-full rounded-[10px] border border-[#dcdedb] bg-white px-3.5 py-3 text-[15px] text-[#191a1c] outline-none placeholder:text-[#9aa0a6] focus:border-[#ffb300] focus:ring-2 focus:ring-[#ffb300]"
+          />
+        </div>
+
+        {favoritas.length > 0 && (
+          <nav aria-label="Linhas favoritas">
+            <span className={rotulo}>Favoritas</span>
+            <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
+              {favoritas.map((f) => (
+                <li key={f.id} className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => selecionarLinha(f)}
+                    className={
+                      "-mx-1 my-0 inline-block whitespace-nowrap rounded-lg bg-gradient-to-b from-[#201e19] to-[#131211] px-3.5 py-2 font-mono text-[13px] font-black uppercase tracking-[0.08em] text-[#ffb300] cursor-pointer border-0 " +
+                      (linhaAtiva?.id === f.id
+                        ? "shadow-[inset_0_0_14px_rgba(255,179,0,0.16),0_0_0_2px_#fbfbfa,0_0_0_4px_#ffb300]"
+                        : "")
+                    }
+                  >
+                    {f.letreiro}
+                  </button>
+                  <button
+                    type="button"
+                    className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border-0 bg-transparent text-[#9aa0a6] hover:bg-[#eceeea] hover:text-[#191a1c] text-[#a06d00]"
+                    aria-label={`Remover ${f.letreiro} das favoritas`}
+                    onClick={() => alternar(f)}
+                  >
+                    <Estrela cheia />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
 
         {linhaAtiva !== null && (
           <section
             aria-label="Linha selecionada"
-            className="absolute left-2 top-2 max-w-[280px] rounded border border-neutral-700 bg-black/85 px-3 py-2"
+            className="rounded-xl border border-[#dcdedb] bg-white p-3.5"
           >
             <div className="flex items-center gap-2">
-              <span className="font-mono text-base font-bold text-amber-300">
+              <Led classe="min-w-0 flex-1 overflow-hidden text-ellipsis text-2xl">
                 {linhaAtiva.letreiro}
-              </span>
+              </Led>
               <button
                 type="button"
                 className={
-                  "ml-auto " + (tem(linhaAtiva.id) ? "text-amber-400" : "text-neutral-500")
+                  "flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border-0 bg-transparent " +
+                  (tem(linhaAtiva.id)
+                    ? "text-[#a06d00] hover:bg-[#eceeea]"
+                    : "text-[#9aa0a6] hover:bg-[#eceeea] hover:text-[#191a1c]")
                 }
                 aria-pressed={tem(linhaAtiva.id)}
                 aria-label={
@@ -215,46 +177,133 @@ export function App() {
               </button>
               <button
                 type="button"
+                className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border-0 bg-transparent text-[22px] leading-none text-[#9aa0a6] hover:bg-[#eceeea] hover:text-[#191a1c]"
                 aria-label="Fechar linha ativa"
-                className="px-1 text-lg leading-none text-neutral-400"
                 onClick={() => setLinhaAtiva(null)}
               >
                 ×
               </button>
             </div>
-            <p className="truncate text-xs text-neutral-300">
-              {linhaAtiva.descricao}
-            </p>
-            <p className="mt-1 text-xs">
+            <p className="mb-1 mt-3 text-sm">{linhaAtiva.descricao}</p>
+            <p className="m-0 flex items-center gap-1.5 text-xs text-[#66696f]">
               {estadoPosicoes.erro !== null ? (
-                <span className="text-red-300">{estadoPosicoes.erro}</span>
+                <span className="text-[#bf3b2b]">{estadoPosicoes.erro}</span>
               ) : estadoPosicoes.dados === null ? (
-                <span className="text-neutral-400">buscando ônibus…</span>
+                "buscando ônibus…"
               ) : (
-                <span className="text-emerald-300">
+                <>
+                  <span
+                    className={pontoVivo + " bg-[#0a6b3c]"}
+                    aria-hidden="true"
+                  />
                   ao vivo · {estadoPosicoes.dados.horario} ·{" "}
                   {estadoPosicoes.dados.veiculos.length}{" "}
                   {estadoPosicoes.dados.veiculos.length === 1
                     ? "ônibus"
                     : "ônibus"}
-                </span>
+                </>
               )}
             </p>
           </section>
         )}
 
+        <section aria-live="polite">
+          {resultados === null &&
+            conectado &&
+            !buscando &&
+            erroBusca === null && (
+              <p className="m-0 text-[13px] text-[#66696f]">
+                Busque pelo número ou nome da linha. Ex.:{" "}
+                <code className="rounded bg-[#eceeea] px-1.5 py-0.5 font-mono text-[13px]">
+                  8000
+                </code>
+                ,{" "}
+                <code className="rounded bg-[#eceeea] px-1.5 py-0.5 font-mono text-[13px]">
+                  N106
+                </code>{" "}
+                ou{" "}
+                <code className="rounded bg-[#eceeea] px-1.5 py-0.5 font-mono text-[13px]">
+                  Paulista
+                </code>
+                .
+              </p>
+            )}
+          {buscando && (
+            <p className="m-0 text-[13px] text-[#66696f]">buscando…</p>
+          )}
+          {erroBusca !== null && (
+            <p className="m-0 text-[13px] text-[#bf3b2b]">{erroBusca}</p>
+          )}
+          {resultados !== null &&
+            !buscando &&
+            resultados.length === 0 &&
+            erroBusca === null && (
+              <p className="m-0 text-[13px] text-[#66696f]">
+                Nenhuma linha encontrada para “{termoPostergado}”.
+              </p>
+            )}
+          {resultados !== null && resultados.length > 0 && (
+            <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+              {resultados.map((l) => (
+                <li key={l.id} className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => selecionarLinha(l)}
+                    className={
+                      "block min-w-0 flex-1 rounded-[10px] border-0 px-[11px] py-[9px] text-left " +
+                      (linhaAtiva?.id === l.id
+                        ? "cursor-pointer bg-[#fff7e0] shadow-[inset_0_0_0_2px_#ffb300]"
+                        : "cursor-pointer bg-transparent hover:bg-[#eceeea]")
+                    }
+                  >
+                    <span className="block font-mono text-base font-black tracking-[0.04em]">
+                      {l.letreiro}
+                    </span>
+                    <span className="block truncate text-[13px] text-[#66696f]">
+                      {l.descricao}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={
+                      "flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border-0 bg-transparent " +
+                      (tem(l.id)
+                        ? "text-[#a06d00] hover:bg-[#eceeea]"
+                        : "text-[#9aa0a6] hover:bg-[#eceeea] hover:text-[#191a1c]")
+                    }
+                    aria-pressed={tem(l.id)}
+                    aria-label={
+                      tem(l.id)
+                        ? `Remover ${l.letreiro} das favoritas`
+                        : `Salvar ${l.letreiro} nas favoritas`
+                    }
+                    onClick={() => alternar(l)}
+                  >
+                    <Estrela cheia={tem(l.id)} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </aside>
+
+      <main className="relative flex h-[44dvh] shrink-0 md:h-dvh">
+        <Mapa linha={linhaAtiva} estado={estadoPosicoes} />
+
         {linhaAtiva === null && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
-            <div className="max-w-[260px] rounded border border-neutral-700 bg-black/85 px-4 py-3 text-center">
-              <span className="font-mono text-sm font-bold">busão·sp</span>
-              <p className="mt-1 text-xs text-neutral-300">
+          <div className="pointer-events-none absolute inset-0 grid place-items-center">
+            <div className="pointer-events-auto max-w-[320px] rounded-2xl bg-[#fbfbfa] px-[30px] py-7 text-center shadow-[0_10px_40px_rgba(23,24,26,0.18)]">
+              <Led classe="text-2xl">busão·sp</Led>
+              <p className="m-0 mt-3.5 text-sm text-[#66696f]">
                 Busque pelo número ou nome da linha para ver os ônibus em
                 circulação agora.
               </p>
             </div>
           </div>
         )}
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
+

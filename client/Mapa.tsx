@@ -12,6 +12,9 @@ import type { Linha } from "../shared/tipos.ts";
 const ZOOM_MINIMO = 0;
 const ZOOM_MAXIMO = 18;
 
+const pontoVivoMapa =
+  "h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#0a6b3c] motion-reduce:animate-none";
+
 export function Mapa(props: {
   linha: Linha | null;
   estado: EstadoPosicoes;
@@ -118,7 +121,7 @@ export function Mapa(props: {
   return (
     <div
       ref={containerRef}
-      className="relative min-h-0 flex-1 touch-none select-none overflow-hidden bg-neutral-900"
+      className="relative min-h-0 flex-1 touch-none select-none overflow-hidden bg-[#eceeea]"
       onPointerDown={aoPressionar}
       onPointerMove={aoArrastar}
       onPointerUp={aoSoltar}
@@ -137,6 +140,7 @@ export function Mapa(props: {
             top: `${tile.topo}px`,
             width: "256px",
             height: "256px",
+            filter: "grayscale(1) contrast(1.05) brightness(1.02)",
           }}
         />
       ))}
@@ -158,7 +162,7 @@ export function Mapa(props: {
               className="h-[14px] w-[14px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-neutral-900 bg-amber-400"
               title={veiculo.prefixo + (veiculo.acessivel ? " · acessível" : "")}
             />
-            <div className="pointer-events-none absolute left-3 top-[-8px] hidden whitespace-nowrap rounded bg-black/85 px-1.5 py-0.5 font-mono text-[10px] group-hover:block">
+            <div className="pointer-events-none absolute left-3 top-[-8px] hidden whitespace-nowrap rounded-md border border-[#dcdedb] bg-[#fbfbfa] px-1.5 py-0.5 font-mono text-xs text-[#191a1c] shadow-[0_2px_8px_rgba(23,24,26,0.15)] group-hover:block">
               {veiculo.prefixo}
               {veiculo.acessivel ? " · acessível" : ""}
             </div>
@@ -188,18 +192,18 @@ export function Mapa(props: {
           );
         })()}
 
-      <div className="absolute bottom-2 left-2 flex flex-col gap-2">
-        <div className="flex flex-col overflow-hidden rounded border border-neutral-700">
+      <div className="absolute right-3 top-3 flex flex-col items-end gap-2">
+        <div className="flex flex-col overflow-hidden rounded-lg border border-[#dcdedb] shadow-[0_2px_10px_rgba(23,24,26,0.12)]">
           <button
             type="button"
-            className="h-8 w-8 bg-black/80 text-lg leading-none"
+            className="h-8 w-8 border-0 bg-white text-lg leading-none text-[#191a1c] hover:bg-[#eceeea]"
             onClick={() => alternarZoom(1)}
           >
             +
           </button>
           <button
             type="button"
-            className="h-8 w-8 bg-black/80 text-lg leading-none"
+            className="h-8 w-8 border-0 border-t border-t-[#dcdedb] bg-white text-lg leading-none text-[#191a1c] hover:bg-[#eceeea]"
             onClick={() => alternarZoom(-1)}
           >
             −
@@ -208,26 +212,30 @@ export function Mapa(props: {
         <button
           type="button"
           className={
-            "rounded px-2 py-1 text-xs " +
+            "inline-flex items-center gap-2 rounded-full border bg-[#fbfbfa] px-4 py-2 text-[13px] font-semibold shadow-[0_2px_10px_rgba(23,24,26,0.18)] hover:border-[#a06d00] " +
             (localizacao.ativa
-              ? "bg-blue-600 text-white"
-              : "border border-neutral-700 bg-black/80 text-neutral-200")
+              ? "border-[#0a6b3c] text-[#0a6b3c]"
+              : "border-[#dcdedb] text-[#191a1c]")
           }
+          aria-pressed={localizacao.ativa}
           onClick={localizacao.alternar}
         >
+          {localizacao.ativa && (
+            <span className={pontoVivoMapa} aria-hidden="true" />
+          )}
           {localizacao.ativa ? "rastreando você" : "onde estou"}
         </button>
         {localizacao.estado.erro !== null && (
           <p
             role="status"
-            className="max-w-[180px] rounded bg-black/85 px-2 py-1 text-[11px] text-red-300"
+            className="m-0 max-w-[230px] rounded-[10px] border border-[#dcdedb] bg-[#fbfbfa] px-3 py-2 text-xs text-[#bf3b2b] shadow-[0_2px_10px_rgba(23,24,26,0.12)]"
           >
             {localizacao.estado.erro}
           </p>
         )}
       </div>
 
-      <p className="absolute bottom-0 right-0 bg-black/70 px-1 text-[9px] text-neutral-400">
+      <p className="absolute bottom-0 right-0 m-0 bg-white/70 px-1 text-[10px] text-[#66696f]">
         ©{" "}
         <a
           className="underline"
