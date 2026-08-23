@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 
-import { ErroOlhoVivo, buscarLinhas, limparSessao } from "../server/olhovivo.ts";
+import {
+  criarClienteOlhoVivo,
+  ErroOlhoVivo,
+  type ClienteOlhoVivo,
+} from "../server/olhovivo.ts";
 
 const TOKEN_FIXO = "token-de-teste";
 
@@ -46,13 +50,12 @@ function dados401(): Response {
   return respostaFake({ status: 401, corpo: "" });
 }
 
+let cliente: ClienteOlhoVivo;
 let chamadas: Chamada[] = [];
 let fila: Response[] = [];
 const fetchOriginal = globalThis.fetch;
 
 beforeEach(() => {
-  process.env["OLHOVIVO_TOKEN"] = TOKEN_FIXO;
-  limparSessao();
   chamadas = [];
   fila = [];
   globalThis.fetch = (async (
@@ -70,21 +73,22 @@ beforeEach(() => {
     }
     return proxima;
   }) as typeof fetch;
+  cliente = criarClienteOlhoVivo({
+    obterToken: async () => TOKEN_FIXO,
+  });
 });
 
 afterEach(() => {
   globalThis.fetch = fetchOriginal;
-  delete process.env["OLHOVIVO_TOKEN"];
-  limparSessao();
 });
 
 test("404 em sessão antiga re-autentica e refaz a chamada", async () => {
   fila.push(loginOk(), dados200(), dados404(), loginOk(), dados200());
 
-  const primeiras = await buscarLinhas("Campo");
+  const primeiras = await cliente.buscarLinhas("Campo");
   assert.equal(primeiras.length, 1);
 
-  const segundas = await buscarLinhas("Campo");
+  const segundas = await cliente.buscarLinhas("Campo");
   assert.equal(segundas.length, 1);
   assert.equal(segundas[0]?.id, 2586);
 
@@ -100,7 +104,7 @@ test("404 em sessão antiga re-autentica e refaz a chamada", async () => {
 test("404 em sessão recém-aberta propaga o erro sem novo login", async () => {
   fila.push(loginOk(), dados404());
 
-  await assert.rejects(buscarLinhas("Campo"), (erro: unknown) => {
+  await assert.rejects(cliente.buscarLinhas("Campo"), (erro: unknown) => {
     assert.ok(erro instanceof ErroOlhoVivo);
     assert.equal(erro.message, "a API da SPTrans respondeu HTTP 404");
     return true;
@@ -115,9 +119,9 @@ test("404 em sessão recém-aberta propaga o erro sem novo login", async () => {
 test("401 segue re-autenticando e esgota com sessão expirada", async () => {
   fila.push(loginOk(), dados200(), dados401(), loginOk(), dados401());
 
-  await buscarLinhas("Campo");
+  await cliente.buscarLinhas("Campo");
 
-  await assert.rejects(buscarLinhas("Campo"), (erro: unknown) => {
+  await assert.rejects(cliente.buscarLinhas("Campo"), (erro: unknown) => {
     assert.ok(erro instanceof ErroOlhoVivo);
     assert.equal(erro.message, "sessão expirou mesmo após nova autenticação");
     return true;

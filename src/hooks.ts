@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ErroApi } from "./api";
+import { ehLinha } from "../shared/parsers.ts";
 import type { Linha, PosicoesDaLinha } from "./types";
 
 export function useValorPostergado<T>(valor: T, atrasoMs: number): T {
@@ -12,19 +13,6 @@ export function useValorPostergado<T>(valor: T, atrasoMs: number): T {
 }
 
 const CHAVE_FAVORITAS = "busao:favoritas";
-
-function ehLinha(valor: unknown): valor is Linha {
-  return (
-    typeof valor === "object" &&
-    valor !== null &&
-    "id" in valor &&
-    typeof valor.id === "number" &&
-    "letreiro" in valor &&
-    typeof valor.letreiro === "string" &&
-    "descricao" in valor &&
-    typeof valor.descricao === "string"
-  );
-}
 
 function lerFavoritas(): Linha[] {
   try {

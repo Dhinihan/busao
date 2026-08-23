@@ -2,14 +2,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { linhasDemo, posicoesDemo } from "./demo.ts";
-import {
-  buscarLinhas,
-  definirAoAutenticar,
-  ErroOlhoVivo,
-  limparSessao,
-  posicoesDaLinha,
-  validarToken,
-} from "./olhovivo.ts";
+import { criarClienteOlhoVivo, ErroOlhoVivo } from "./olhovivo.ts";
 import {
   apagarToken,
   lerEstado,
@@ -20,8 +13,11 @@ import {
 const DEMO = process.env["DEMO"] === "1";
 const PORTA = Number(process.env["PORT"] ?? 8787);
 
-definirAoAutenticar((token) => {
-  void marcarValidadoSeAtual(token).catch(() => {});
+const olhovivo = criarClienteOlhoVivo({
+  obterToken: async () => (await lerEstado()).token,
+  aoAutenticar: (token) => {
+    void marcarValidadoSeAtual(token).catch(() => {});
+  },
 });
 
 const app = new Hono();
@@ -63,7 +59,7 @@ app.post("/api/token", async (c) => {
   }
   let validado = false;
   try {
-    validado = await validarToken(bruto);
+    validado = await olhovivo.validar(bruto);
   } catch {
     validado = false;
   }
@@ -72,7 +68,7 @@ app.post("/api/token", async (c) => {
 });
 
 app.delete("/api/token", async (c) => {
-  limparSessao();
+  olhovivo.descartarSessao();
   await apagarToken();
   return c.body(null, 204);
 });
@@ -92,7 +88,7 @@ app.get("/api/linhas", async (c) => {
       ),
     );
   }
-  return c.json(await buscarLinhas(termo));
+  return c.json(await olhovivo.buscarLinhas(termo));
 });
 
 app.get("/api/posicoes/:id", async (c) => {
@@ -107,7 +103,7 @@ app.get("/api/posicoes/:id", async (c) => {
     }
     return c.json(posicoes);
   }
-  return c.json(await posicoesDaLinha(id));
+  return c.json(await olhovivo.posicoesDaLinha(id));
 });
 
 if (process.env["NODE_ENV"] === "production") {

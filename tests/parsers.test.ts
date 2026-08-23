@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { paraLinha, paraPosicoes } from "../server/olhovivo.ts";
-import { mensagemDeErro } from "../src/api.ts";
+import { paraLinha, paraPosicoes } from "../shared/parsers.ts";
+import { mensagemDeErro } from "../shared/mensagens.ts";
 
 test("paraLinha mapeia um registro completo", () => {
   assert.deepEqual(

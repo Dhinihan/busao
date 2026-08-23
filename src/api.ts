@@ -1,30 +1,12 @@
+import { mensagemDeErro } from "../shared/mensagens.ts";
+import { ehLinha, ehStatus, paraPosicoesDoCliente } from "../shared/parsers.ts";
 import type {
   Linha,
-  PosicaoVeiculo,
   PosicoesDaLinha,
   StatusApi,
-} from "./types";
+} from "../shared/tipos.ts";
 
 export class ErroApi extends Error {}
-
-export function mensagemDeErro(corpo: unknown, status: number): string {
-  if (
-    typeof corpo === "object" &&
-    corpo !== null &&
-    "erro" in corpo &&
-    typeof corpo.erro === "string" &&
-    corpo.erro !== ""
-  ) {
-    if (corpo.erro === "token recusado pela SPTrans") {
-      return (
-        "a SPTrans ainda não ativou essa chave — chaves recém-criadas podem " +
-        "levar alguns dias. Tentamos reconectar automaticamente."
-      );
-    }
-    return corpo.erro;
-  }
-  return `falha na comunicação com o servidor (HTTP ${status})`;
-}
 
 async function lerErro(resposta: Response): Promise<ErroApi> {
   const corpo: unknown = await resposta.json().catch(() => null);
@@ -36,62 +18,6 @@ async function obterCorpo(url: string, init?: RequestInit): Promise<unknown> {
   const corpo: unknown = await resposta.json().catch(() => null);
   if (!resposta.ok) throw new ErroApi(mensagemDeErro(corpo, resposta.status));
   return corpo;
-}
-
-function ehStatus(valor: unknown): valor is StatusApi {
-  return (
-    typeof valor === "object" &&
-    valor !== null &&
-    "configurado" in valor &&
-    typeof valor.configurado === "boolean" &&
-    "demo" in valor &&
-    typeof valor.demo === "boolean" &&
-    "validado" in valor &&
-    typeof valor.validado === "boolean"
-  );
-}
-
-function ehLinha(valor: unknown): valor is Linha {
-  return (
-    typeof valor === "object" &&
-    valor !== null &&
-    "id" in valor &&
-    typeof valor.id === "number" &&
-    "letreiro" in valor &&
-    typeof valor.letreiro === "string" &&
-    "descricao" in valor &&
-    typeof valor.descricao === "string"
-  );
-}
-
-function paraPosicoes(bruto: unknown): PosicoesDaLinha | null {
-  if (typeof bruto !== "object" || bruto === null) return null;
-  if (!("horario" in bruto) || typeof bruto.horario !== "string") return null;
-  if (!("veiculos" in bruto) || !Array.isArray(bruto.veiculos)) return null;
-  const veiculos: PosicaoVeiculo[] = [];
-  for (const item of bruto.veiculos) {
-    if (
-      typeof item !== "object" ||
-      item === null ||
-      !("prefixo" in item) ||
-      typeof item.prefixo !== "string" ||
-      !("lat" in item) ||
-      typeof item.lat !== "number" ||
-      !("lng" in item) ||
-      typeof item.lng !== "number" ||
-      !("acessivel" in item) ||
-      typeof item.acessivel !== "boolean"
-    ) {
-      continue;
-    }
-    veiculos.push({
-      prefixo: item.prefixo,
-      lat: item.lat,
-      lng: item.lng,
-      acessivel: item.acessivel,
-    });
-  }
-  return { horario: bruto.horario, veiculos };
 }
 
 export const api = {
@@ -124,7 +50,7 @@ export const api = {
     const init =
       opcoes.sinal !== undefined ? { signal: opcoes.sinal } : undefined;
     const corpo = await obterCorpo(`/api/posicoes/${codigoLinha}`, init);
-    const dados = paraPosicoes(corpo);
+    const dados = paraPosicoesDoCliente(corpo);
     if (dados === null) {
       throw new ErroApi("resposta de posições inválida");
     }

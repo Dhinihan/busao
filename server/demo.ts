@@ -1,4 +1,8 @@
-import type { Linha, PosicoesDaLinha, PosicaoVeiculo } from "./olhovivo.ts";
+import type {
+  Linha,
+  PosicoesDaLinha,
+  PosicaoVeiculo,
+} from "../shared/tipos.ts";
 
 type TrajetoDemo = {
   readonly id: number;
