@@ -608,7 +608,21 @@ e repete em 10 s) e não ocorrem no padrão real de uso.
 
 ## Pendência da Etapa 5
 
-Apagar legado (`src/`, `server/token-store.ts`+`server/demo.ts` já fora,
-`index.html`, `vite.config.ts`, `data/`, `dist/`, `scratch/`), limpar
-dependências do package.json e revisar linhas mortas `pos:*` no DB do deploy
-(restaram 4 entradas dos experimentos de cache em DB; inofensivas, nunca lidas).
+Nenhuma — executada em 2026-08-23:
+
+- Legado apagado: `src/`, `index.html`, `vite.config.ts`, `data/`,
+  `tsconfig.tsbuildinfo` (o par `token-store.ts`/`demo.ts` já tinha saído na
+  Etapa 2; `scratch/` era não-versionado e foi removido do disco e do
+  `.gitignore` junto com `dist/` e `data/`).
+- `package.json`: sem dependências de runtime; devDependencies reduzidas a
+  `typescript`, `@types/node` e `preact` (somente para tipos no tsc — o
+  runtime Preact vem da toolchain da capsule). Scripts: `dev`
+  (`npx lakebed@0.0.29 dev`), `test`, `typecheck`. Lockfile atualizado.
+- `tsconfig.json`: include de `server/shared/tests/client` com
+  `jsxImportSource: preact`; exclui apenas `server/index.ts` (compilado pela
+  capsule). O gate `rg -n -i '\b(leaflet|hono|wizard|token-store|react)\b' …`
+  retorna vazio (`react-jsx` é o modo de emissão de JSX, não a lib React).
+- README reescrito para a nova realidade.
+- Verificação pós-limpeza: `npm test` 37 pass, ambos os tscs limpos,
+  redeploy e smoke de produção revalidado (25/25 com o item de timing
+  confirmado por espera explícita da resposta).

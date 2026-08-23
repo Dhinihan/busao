@@ -6,6 +6,7 @@
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
+    "jsxImportSource": "preact",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
@@ -15,8 +16,8 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": ["vite/client", "node"]
+    "types": ["node"]
   },
-  "include": ["src", "server", "shared", "tests", "vite.config.ts"],
-  "exclude": ["server/index.ts", "client", "scratch"]
+  "include": ["server", "shared", "tests", "client"],
+  "exclude": ["server/index.ts"]
 }

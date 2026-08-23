@@ -5,77 +5,66 @@ Site minimalista para acompanhar em tempo real onde estão os ônibus das linhas
 - Busca de linhas por **número** (`8000`, `N106`) ou **nome** (`Paulista`)
 - Posições dos ônibus em **mapa ao vivo** (atualização a cada 10 s)
 - **Favoritas** salvas no navegador (localStorage)
+- Rastreamento da posição do usuário (`watchPosition`, persistido)
 
-Os dados vêm da [API Olho Vivo (SPTrans)](https://www.sptrans.com.br/desenvolvedores/api-do-olho-vivo-guia-de-referencia/documentacao-api/) através de um proxy próprio (a API não permite chamadas diretas do navegador). Toda resposta externa é validada no servidor e no cliente antes de uso.
+No ar em **https://busao.lakebed.app**, como capsule
+[Lakebed](https://lakebed.app). Os dados vêm da [API Olho Vivo
+(SPTrans)](https://www.sptrans.com.br/desenvolvedores/api-do-olho-vivo-guia-de-referencia/documentacao-api/)
+através dos endpoints server-side da própria capsule (a API não permite chamadas
+diretas do navegador). Toda resposta externa é validada no servidor e no cliente
+antes de uso.
 
 ## Como rodar
 
 ```sh
 npm install
-npm run dev          # front na porta 5174, API na 8787 (ambos só em localhost)
-npm test             # suíte node:test do contrato Olho Vivo
-npm run typecheck    # tsc estrito
+npx lakebed@0.0.29 dev --port 3000   # capsule completa em http://localhost:3000
+npm test                             # suíte node:test (37 testes)
+npm run typecheck                    # tsc estrito dos módulos testáveis
 ```
 
-### Acesso externo (ex.: pelo celular)
-
-Os serviços escutam apenas em `127.0.0.1`. Para alcançá-los fora da máquina,
-use o túnel do Tailscale (autenticado pela sua tailnet):
-
-```sh
-tailscale serve --bg --https=443 http://127.0.0.1:5174
-```
-
-O site fica disponível em `https://<seu-host>.<tailnet>.ts.net`. Se o Vite
-recusar o Host, informe-o em `ALLOWED_HOSTS` (separado por vírgulas).
-Outras variáveis: `WEB_PORT` (padrão `5174`) e `PORT` (API, padrão `8787`).
+Requisito: CLI do Lakebed via `npx` (testado com `lakebed@0.0.29`).
 
 ### Token da SPTrans
 
-No primeiro acesso o site abre um **assistente** que guia os 3 passos do
-cadastro de desenvolvedores:
-
-1. Criar conta em [sptrans.com.br/desenvolvedores](https://www.sptrans.com.br/desenvolvedores/cadastro-desenvolvedores/) e confirmar pelo e-mail
-2. No perfil, criar um aplicativo em “Meus Aplicativos” ([perfil](https://www.sptrans.com.br/desenvolvedores/perfil-desenvolvedor/))
-3. Colar o token gerado — ele é validado na hora e salvo em `data/token.json`
-   (permissão `0600`, fora do Git)
-
-O botão **configurar** reabre o assistente a qualquer momento para trocar ou
-avaliar a chave; `DELETE /api/token` remove o arquivo.
-
-**Chave pendente:** chaves recém-criadas no portal da SPTrans podem demorar
-alguns dias para ativar no servidor da API (problema conhecido). O token é
-salvo mesmo assim como *pendente* e cada requisição tenta autenticar de novo —
-quando a chave liga, o site volta sozinho.
-
-**Rotação:** se uma chave for exposta, crie outro aplicativo no portal e
-substitua pela UI (“configurar” → passo 3).
-
-Alternativa por variável de ambiente: `OLHOVIVO_TOKEN=seu-token npm run dev`.
-
-### Modo demonstração
-
-Sem token, dá para explorar a interface com dados sintéticos:
+Crie uma conta em
+[sptrans.com.br/desenvolvedores](https://www.sptrans.com.br/desenvolvedores/cadastro-desenvolvedores/),
+gere um token em “Meus Aplicativos” e coloque-o no env server-only da capsule:
 
 ```sh
-DEMO=1 npm run dev
+echo 'OLHOVIVO_TOKEN=seu-token' > .env.lakebed.server   # 0600, fora do Git
+chmod 600 .env.lakebed.server
 ```
 
-## Produção
+Chaves recém-criadas podem levar alguns dias para ativar no servidor da SPTrans;
+enquanto isso as buscas retornam a mensagem “a SPTrans ainda não ativou essa
+chave”. O servidor faz login automaticamente e reutiliza a sessão (cookie)
+persistida no banco da capsule; posições repetidas dentro de 7 s são servidas de
+cache em memória.
+
+## Deploy
 
 ```sh
-npm run build
-npm start            # servidor único em 127.0.0.1:8787 servindo dist/
+npx lakebed@0.0.29 auth login        # uma vez
+npx lakebed@0.0.29 deploy            # publica client/ + shared/ + server/index.ts
+npx lakebed@0.0.29 inspect <deployId>
+npx lakebed@0.0.29 domains add busao.lakebed.app
 ```
 
-Aponte o `tailscale serve` para a porta da API nesse caso.
+O deploy sincroniza o env com `.env.lakebed.server` — recriar o arquivo antes de
+deployar a partir de um clone fresco, senão o deploy sobe sem token.
 
 ## Estrutura
 
 ```
-server/          proxy Hono → API Olho Vivo (+ sessão por cookie e modo demo)
-src/components   Wizard (configuração do token), Mapa (Leaflet), Estrela
-src/hooks.ts     debounce da busca, favoritas (localStorage), polling de posições
-src/api.ts       cliente HTTP que valida cada resposta antes de usar
-tests/           node:test do contrato SPTrans e das mensagens de erro
+client/           app Preact: busca, favoritas, polling, mapa slippy próprio
+shared/           tipos, parsers e validadores usados por servidor e cliente
+server/index.ts   capsule Lakebed: endpoints /api/status|linhas|posicoes,
+                  sessão SPTrans no banco, cache de posições em memória
+server/olhovivo.ts    cliente Olho Vivo (login por cookie, hooks de sessão)
+tests/            node:test do contrato SPTrans, cache, tile-math e api cliente
+PLANO-LAKEBED.md  plano de migração e registros das etapas
 ```
+
+O mapa é renderizado sem bibliotecas (tiles OSM + matemática própria em
+`shared/tile-math.ts`). Sem CSS externo: layout em Tailwind inline.
