@@ -4,3 +4,6 @@ data/
 .env
 *.log
 tsconfig.tsbuildinfo
+.env.lakebed.server
+.lakebed/
+scratch/
