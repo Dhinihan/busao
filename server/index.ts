@@ -1,8 +1,8 @@
-import { capsule, endpoint, json } from "lakebed/server";
+import { capsule, endpoint, json, string, table } from "lakebed/server";
 import {
   criarClienteOlhoVivo,
   ErroOlhoVivo,
-  type ClienteOlhoVivo,
+  type Sessao,
 } from "./olhovivo.ts";
 import { criarCachePosicoes } from "./cache-posicoes.ts";
 import {
@@ -16,16 +16,93 @@ type LogLakebed = {
   info: (mensagem: string, extras?: Record<string, unknown>) => void;
 };
 
+type DbEstado = {
+  estado: {
+    withIndex(
+      nome: "por_chave",
+      alcance: (q: any) => any,
+    ): {
+      first(): Promise<any>;
+    };
+    insert(linha: { chave: string; valor: string }): Promise<any>;
+    update(id: unknown, parcial: { valor?: string }): Promise<unknown>;
+  };
+};
+
 const logMudo: LogLakebed = { info: () => {} };
 
 let tokenAtual: string | null = null;
 let logAtual: LogLakebed = logMudo;
+let dbAtual: DbEstado | null = null;
 
-const olhovivo: ClienteOlhoVivo = criarClienteOlhoVivo({
+function preparar(ctx: {
+  env: Record<string, string | undefined>;
+  log: LogLakebed;
+  db: DbEstado;
+}): void {
+  const bruto = ctx.env["OLHOVIVO_TOKEN"];
+  tokenAtual = bruto === undefined || bruto.trim() === "" ? null : bruto.trim();
+  logAtual = ctx.log ?? logMudo;
+  dbAtual = ctx.db;
+}
+
+async function lerLinha(chave: string): Promise<{ id: unknown; valor: unknown } | null> {
+  const db = dbAtual;
+  if (db === null) return null;
+  return db.estado
+    .withIndex("por_chave", (q) => q.eq("chave", chave))
+    .first();
+}
+
+function interpretarSessao(valor: unknown): Sessao | null {
+  if (
+    typeof valor === "object" &&
+    valor !== null &&
+    "token" in valor &&
+    typeof valor.token === "string" &&
+    "cookie" in valor &&
+    typeof valor.cookie === "string"
+  ) {
+    return { token: valor.token, cookie: valor.cookie };
+  }
+  return null;
+}
+
+async function lerSessaoDb(): Promise<Sessao | null> {
+  const linha = await lerLinha("sessao");
+  return linha === null ? null : interpretarSessao(linha.valor);
+}
+
+async function gravarLinha(
+  chave: string,
+  valor: string,
+): Promise<void> {
+  const db = dbAtual;
+  if (db === null) return;
+  const existente = await lerLinha(chave);
+  try {
+    if (existente === null) {
+      await db.estado.insert({ chave, valor });
+    } else {
+      await db.estado.update(existente.id, { valor });
+    }
+  } catch (erro) {
+    const nome = erro instanceof Error ? erro.name : typeof erro;
+    logAtual.info("estado: escrita ignorada", { chave, tipo: nome });
+  }
+}
+
+async function gravarSessaoDb(sessao: Sessao): Promise<void> {
+  await gravarLinha("sessao", JSON.stringify(sessao));
+}
+
+const olhovivo = criarClienteOlhoVivo({
   obterToken: async () => tokenAtual,
   aoAutenticar: () => {
     logAtual.info("olhovivo relogin");
   },
+  lerSessao: lerSessaoDb,
+  gravarSessao: gravarSessaoDb,
 });
 
 const cachePosicoes = criarCachePosicoes({
@@ -34,12 +111,6 @@ const cachePosicoes = criarCachePosicoes({
     logAtual.info("cache", { linhaId, resultado });
   },
 });
-
-function preparar(ctx: { env: Record<string, string | undefined>; log: LogLakebed }): void {
-  const bruto = ctx.env["OLHOVIVO_TOKEN"];
-  tokenAtual = bruto === undefined || bruto.trim() === "" ? null : bruto.trim();
-  logAtual = ctx.log ?? logMudo;
-}
 
 function respostaDeErro(erro: unknown) {
   if (erro instanceof ErroOlhoVivo) {
@@ -53,6 +124,12 @@ function respostaDeErro(erro: unknown) {
 
 export default capsule({
   name: "busao",
+  schema: {
+    estado: table({
+      chave: string(),
+      valor: string(),
+    }).index("por_chave", ["chave"]),
+  },
   endpoints: {
     status: endpoint({ method: "GET", path: "/api/status" }, async (ctx) => {
       preparar(ctx);

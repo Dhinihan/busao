@@ -5,6 +5,7 @@ import {
   criarClienteOlhoVivo,
   ErroOlhoVivo,
   type ClienteOlhoVivo,
+  type Sessao,
 } from "../server/olhovivo.ts";
 
 const TOKEN_FIXO = "token-de-teste";
@@ -131,6 +132,52 @@ test("401 segue re-autenticando e esgota com sessão expirada", async () => {
     { metodo: "POST", caminho: "/v2.1/Login/Autenticar?token=token-de-teste" },
     { metodo: "GET", caminho: "/v2.1/Linha/Buscar?termosBusca=Campo" },
     { metodo: "GET", caminho: "/v2.1/Linha/Buscar?termosBusca=Campo" },
+    { metodo: "POST", caminho: "/v2.1/Login/Autenticar?token=token-de-teste" },
+    { metodo: "GET", caminho: "/v2.1/Linha/Buscar?termosBusca=Campo" },
+  ]);
+});
+
+test("hooks de sessão externalizam o cookie e evitam re-login", async () => {
+  const loja: { atual: Sessao | null } = { atual: null };
+  let leituras = 0;
+  const clienteExterno = criarClienteOlhoVivo({
+    obterToken: async () => TOKEN_FIXO,
+    lerSessao: async () => {
+      leituras += 1;
+      return loja.atual;
+    },
+    gravarSessao: async (sessao) => {
+      loja.atual = sessao;
+    },
+  });
+
+  fila.push(loginOk(), dados200(), dados200());
+  await clienteExterno.buscarLinhas("Campo");
+  await clienteExterno.buscarLinhas("Campo");
+
+  assert.equal(leituras, 2);
+  assert.equal(loja.atual?.cookie, "apiCredentials=falso");
+  const logins = chamadas.filter((c) => c.metodo === "POST").length;
+  assert.equal(logins, 1, "segundo request reutilizou a sessão externa");
+});
+
+test("sessão externa de outro token é descartada e refaz login", async () => {
+  const loja: { atual: Sessao | null } = {
+    atual: { token: "token-antigo", cookie: "apiCredentials=velho" },
+  };
+  const clienteExterno = criarClienteOlhoVivo({
+    obterToken: async () => TOKEN_FIXO,
+    lerSessao: async () => loja.atual,
+    gravarSessao: async (sessao) => {
+      loja.atual = sessao;
+    },
+  });
+
+  fila.push(loginOk(), dados200());
+  await clienteExterno.buscarLinhas("Campo");
+
+  assert.equal(loja.atual?.token, TOKEN_FIXO);
+  assert.deepEqual(chamadas, [
     { metodo: "POST", caminho: "/v2.1/Login/Autenticar?token=token-de-teste" },
     { metodo: "GET", caminho: "/v2.1/Linha/Buscar?termosBusca=Campo" },
   ]);

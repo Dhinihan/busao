@@ -11,7 +11,7 @@ export class TokenInvalidoError extends ErroOlhoVivo {
   }
 }
 
-type Sessao = {
+export type Sessao = {
   readonly token: string;
   readonly cookie: string;
 };
@@ -42,13 +42,31 @@ function campoDeTexto(bruto: string | undefined): string | null {
   return cookie === undefined || cookie === "" ? null : cookie;
 }
 
-export function criarClienteOlhoVivo(opcoes: {
+type ClienteOlhoVivoOpcoes = {
   readonly obterToken: () => Promise<string | null>;
   readonly buscar?: typeof fetch;
   readonly aoAutenticar?: (token: string) => void;
-}): ClienteOlhoVivo {
+  readonly lerSessao?: () => Promise<Sessao | null>;
+  readonly gravarSessao?: (sessao: Sessao) => Promise<void>;
+};
+
+export function criarClienteOlhoVivo(opcoes: ClienteOlhoVivoOpcoes): ClienteOlhoVivo {
   const buscar = opcoes.buscar ?? fetch;
-  let sessao: Sessao | null = null;
+  let sessaoMemoria: Sessao | null = null;
+
+  async function sessaoAtual(): Promise<Sessao | null> {
+    if (opcoes.lerSessao !== undefined) return opcoes.lerSessao();
+    return sessaoMemoria;
+  }
+
+  async function guardarSessao(sessao: Sessao): Promise<void> {
+    sessaoMemoria = sessao;
+    await opcoes.gravarSessao?.(sessao);
+  }
+
+  function descartarSessaoAtual(): void {
+    sessaoMemoria = null;
+  }
 
   async function entrar(token: string): Promise<Sessao> {
     let resposta: Response;
@@ -78,14 +96,14 @@ export function criarClienteOlhoVivo(opcoes: {
     if (token === null) throw new ErroOlhoVivo("token da SPTrans não configurado");
 
     for (let tentativa = 0; tentativa < 2; tentativa += 1) {
-      const existente = sessao;
+      const existente = await sessaoAtual();
       const reutilizada = existente !== null && existente.token === token;
       let atual: Sessao;
       if (reutilizada) {
         atual = existente;
       } else {
         atual = await entrar(token);
-        sessao = atual;
+        await guardarSessao(atual);
       }
       let resposta: Response;
       try {
@@ -100,7 +118,7 @@ export function criarClienteOlhoVivo(opcoes: {
         resposta.status === 403 ||
         (resposta.status === 404 && reutilizada);
       if (sessaoSuspeita) {
-        sessao = null;
+        descartarSessaoAtual();
         continue;
       }
       if (!resposta.ok) {
@@ -136,7 +154,7 @@ export function criarClienteOlhoVivo(opcoes: {
 
     async validar(token: string): Promise<boolean> {
       try {
-        sessao = await entrar(token);
+        await guardarSessao(await entrar(token));
         return true;
       } catch (erro) {
         if (erro instanceof TokenInvalidoError) return false;
@@ -145,7 +163,7 @@ export function criarClienteOlhoVivo(opcoes: {
     },
 
     descartarSessao(): void {
-      sessao = null;
+      descartarSessaoAtual();
     },
   };
 }

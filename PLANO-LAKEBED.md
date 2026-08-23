@@ -514,3 +514,55 @@ Gates reprovados:
 Etapa 3 (cliente completo), 4 (domínio) e 5 (limpeza) não executadas. Rollback:
 tag `pre-lakebed`. O teste representativo de 10 usuários não rodou: queimaria a
 cota diária sem mudar o veredito já dado pelo limite publicado.
+
+## Resultado do spike sessão/cache no DB · 2026-08-23 · GO parcial
+
+Segunda rodada do spike, respondendo às opções 1 (sessão SPTrans persistida no
+DB da capsule) e 2 (cache de posições no DB). Deploy `dep_kujltk6syxQG5gXK`,
+schema `estado { chave, valor }` com índice `por_chave`.
+
+### Opção 1 — sessão no DB: **validada**
+
+- Sessão `{token, cookie}` gravida/lida do DB via hooks `lerSessao/gravarSessao`
+  do cliente Olho Vivo.
+- Hospedado, decomposição de latência: `/api/status` (piso do runtime) ≈ 1,0–1,1 s;
+  poll com sessão reutilizada ≈ 1,4–1,5 s (piso + fetch, sem login); antes do
+  spike cada request relogava (~1,3–2,1 s + login upstream).
+- Login acontece só na primeira request ou quando a sessão expira.
+
+### Opção 2 — cache de posições no DB: **reprovada**
+
+- Escritas no DB sob miss concorrente estouram lock do Postgres da plataforma:
+  rajada de 8 requests simultâneos em 4 linhas ⇒ exatamente 1 falha por linha,
+  HTTP 500 com `canceling statement due to lock timeout`.
+- O erro ocorre mesmo com tolerância a corrida nas escritas e mesmo reduzindo
+  o DB a uma única leitura por request: a transação do endpoint cobre o handler
+  inteiro (incluindo o fetch upstream aguardado), então requests concorrentes
+  serializam e o lock timeout (~3,4 s) cancela as excedentes.
+- Cache permanece **em memória por isolate** (`criarCachePosicoes`, TTL 7 s):
+  ajuda enquanto o isolate vive; entre isolates o custo é um fetch upstream com
+  sessão reutilizada — aceitável.
+
+### Teste representativo (10 usuários × 5 polls defasados, 10 s)
+
+50/50 requests OK, zero falhas. Latência: p50 1,57 s · p90 2,34 s · max 2,54 s.
+Sob polling real (defasado), sem nenhum lock timeout.
+
+### Cota
+
+Sem contadores de uso expostos em `lakebed inspect`. `Mutations: (none)` lista
+mutações declaradas do schema — endpoints não declaram nenhuma; escritas
+internas de endpoint não parecem contabilizar na cota de mutations, mas isso
+não é confirmável pela superfície atual. Limite efetivo segue sendo
+10.000 requests/dia (aceito pelo usuário como ~projeção).
+
+### Estado final do código
+
+- `server/index.ts`: capsule com schema `estado`; sessão no DB; cache em
+  memória; helpers de cache-DB removidos após reprovação da opção 2.
+- Suíte: 37 testes pass, typecheck limpo, deploy limpo verificado
+  (status/linhas/posicoes/400 hospedados).
+
+Veredito para Etapa 3+: prosseguir com sessão no DB + cache em memória. Os
+500 sob rajadas simultâneas são tolerados pelo cliente (mantém últimas posições
+e repete em 10 s) e não ocorrem no padrão real de uso.
