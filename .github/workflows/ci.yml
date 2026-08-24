@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificacao:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+
+  deploy:
+    needs: verificacao
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Recriar env server-only (deploy sincroniza este arquivo)
+        run: |
+          printf 'OLHOVIVO_TOKEN=%s\n' "$OLHOVIVO_TOKEN" > .env.lakebed.server
+          chmod 600 .env.lakebed.server
+        env:
+          OLHOVIVO_TOKEN: ${{ secrets.OLHOVIVO_TOKEN }}
+      - name: Deploy Lakebed
+        run: npx -y lakebed@0.0.29 deploy
+        env:
+          LAKEBED_TOKEN: ${{ secrets.LAKEBED_TOKEN }}
