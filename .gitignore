@@ -4,3 +4,10 @@ node_modules/
 tsconfig.tsbuildinfo
 .env.lakebed.server
 .lakebed/
+
+# GTFS da SPTrans (baixado manualmente; grande demais para o git)
+# O mapa de cls e a carga SQL GERADOS são versionados.
+gtfs/*.zip
+
+# estado local do wrangler (D1 de dev)
+.wrangler/

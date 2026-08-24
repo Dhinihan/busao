@@ -6,11 +6,13 @@
   "scripts": {
     "dev": "npx lakebed@0.0.29 dev --port ${WEB_PORT:-3000}",
     "test": "node --test tests/*.test.ts",
-    "typecheck": "tsc -p tsconfig.testavel.json"
+    "typecheck": "tsc -p tsconfig.testavel.json && tsc -p worker/tsconfig.json"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260823.1",
     "@types/node": "^26.2.0",
     "preact": "^10.29.8",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "wrangler": "^4.125.0"
   }
 }

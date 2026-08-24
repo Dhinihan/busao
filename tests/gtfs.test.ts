@@ -1,0 +1,114 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import {
+  csvParaRegistros,
+  expandirJanela,
+  extrairRotas,
+  prefixoLetreiro,
+  tiposDiaDoServico,
+} from "../shared/gtfs.ts";
+
+test("csvParaRegistros lida com vírgula e quebra de linha dentro de aspas", () => {
+  const registros = csvParaRegistros(
+    'stop_id,stop_name\n"1","R. Foo, 254"\n"2","Terminal\nPinheiros"',
+  );
+  assert.deepEqual(registros, [
+    { stop_id: "1", stop_name: "R. Foo, 254" },
+    { stop_id: "2", stop_name: "Terminal\nPinheiros" },
+  ]);
+});
+
+test("expandirJanela gera partidas no passo informado", () => {
+  assert.deepEqual(
+    expandirJanela({ inicio: "06:00", fim: "06:59", intervaloSegundos: 480 }),
+    ["06:00", "06:08", "06:16", "06:24", "06:32", "06:40", "06:48", "06:56"],
+  );
+});
+
+test("expandirJanela com passo que não fecha a hora para no limite", () => {
+  assert.deepEqual(
+    expandirJanela({ inicio: "05:00", fim: "05:59", intervaloSegundos: 1200 }),
+    ["05:00", "05:20", "05:40"],
+  );
+});
+
+test("expandirJanela rejeita janelas vazias ou invertidas", () => {
+  assert.deepEqual(
+    expandirJanela({ inicio: "07:00", fim: "06:00", intervaloSegundos: 600 }),
+    [],
+  );
+  assert.deepEqual(
+    expandirJanela({ inicio: "07:00", fim: "07:00", intervaloSegundos: 0 }),
+    [],
+  );
+});
+
+test("tiposDiaDoServico mapeia os serviços do calendar da SPTrans", () => {
+  const linha = (valores: string): Record<string, string> =>
+    Object.fromEntries(
+      ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        .map((dia, i) => [dia, valores[i] ?? ""]),
+    );
+  assert.deepEqual(tiposDiaDoServico(linha("1111100")), ["util"]);
+  assert.deepEqual(tiposDiaDoServico(linha("0000010")), ["sab"]);
+  assert.deepEqual(tiposDiaDoServico(linha("0000001")), ["dom"]);
+  assert.deepEqual(tiposDiaDoServico(linha("1111111")), ["util", "sab", "dom"]);
+  assert.deepEqual(tiposDiaDoServico(linha("1000000")), []);
+});
+
+function fixture() {
+  const registro = (pares: Record<string, string>) => pares;
+  return {
+    rotas: [registro({ route_id: "477A-10", route_long_name: "Sacomã - Term. Pinheiros" })],
+    viagens: [
+      registro({ route_id: "477A-10", service_id: "US_", trip_id: "t0", direction_id: "0" }),
+      registro({ route_id: "477A-10", service_id: "_S_", trip_id: "t1", direction_id: "1" }),
+    ],
+    tempos: [
+      registro({ trip_id: "t0", stop_sequence: "1", stop_id: "s1", departure_time: "17:00:00" }),
+      registro({ trip_id: "t1", stop_sequence: "1", stop_id: "s2", departure_time: "09:10:00" }),
+    ],
+    frequencias: [
+      registro({ trip_id: "t0", start_time: "06:00", end_time: "06:30", headway_secs: "900" }),
+      registro({ trip_id: "t0", start_time: "07:00", end_time: "07:20", headway_secs: "1200" }),
+    ],
+    calendar: [
+      registro({ service_id: "US_", monday: "1", tuesday: "1", wednesday: "1", thursday: "1", friday: "1", saturday: "1", sunday: "0" }),
+      registro({ service_id: "_S_", monday: "0", tuesday: "0", wednesday: "0", thursday: "0", friday: "0", saturday: "1", sunday: "0" }),
+    ],
+    paradas: [
+      registro({ stop_id: "s1", stop_name: "Terminal Lapa - Plat. 1" }),
+      registro({ stop_id: "s2", stop_name: "Pça. Ramos De Azevedo" }),
+    ],
+  };
+}
+
+test("extrairRotas une janelas por tipo de dia e usa stop_times quando falta frequencies", () => {
+  const rotas = extrairRotas(fixture());
+  assert.equal(rotas.length, 1);
+  const rota = rotas[0];
+  assert.ok(rota);
+  assert.equal(rota.routeId, "477A-10");
+  assert.deepEqual(rota.sentidos.map((s) => s.directionId), [0, 1]);
+
+  const ida = rota.sentidos[0];
+  assert.ok(ida);
+  assert.equal(ida.origem, "Terminal Lapa - Plat. 1");
+  // US_ cobre dia útil e sábado; _S_ só sábado.
+  assert.deepEqual(ida.partidas.util, ["06:00", "06:15", "06:30", "07:00", "07:20"]);
+  assert.deepEqual(ida.partidas.sab, ["06:00", "06:15", "06:30", "07:00", "07:20"]);
+  assert.deepEqual(ida.partidas.dom, []);
+
+  const volta = rota.sentidos[1];
+  assert.ok(volta);
+  assert.equal(volta.origem, "Pça. Ramos De Azevedo");
+  // Sem frequencies: cai na partida da primeira stop_time.
+  assert.deepEqual(volta.partidas.sab, ["09:10"]);
+  assert.deepEqual(volta.partidas.util, []);
+});
+
+test("prefixoLetreiro separa sufixo do letreiro", () => {
+  assert.equal(prefixoLetreiro("477A-10"), "477A");
+  assert.equal(prefixoLetreiro("8000-10"), "8000");
+  assert.equal(prefixoLetreiro("SEMTRACO"), "SEMTRACO");
+});
