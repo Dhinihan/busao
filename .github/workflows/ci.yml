@@ -56,7 +56,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Schema e carga do D1 (idempotente: DELETE + INSERT versionados)
+      - name: "Schema e carga do D1 remoto (idempotente)"
         working-directory: worker
         run: |
           npx wrangler d1 execute busao-horarios --remote --file ../gtfs/schema.sql -y
