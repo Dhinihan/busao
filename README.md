@@ -44,6 +44,18 @@ chave”. O servidor faz login automaticamente e reutiliza a sessão (cookie)
 persistida no banco da capsule; posições repetidas dentro de 7 s são servidas de
 cache em memória.
 
+### Worktrees (`git worktree`)
+
+O arquivo fica fora do Git, então worktrees novos nascem sem token. Rode
+
+```sh
+./busao-env
+```
+
+para copiar o `.env.lakebed.server` do checkout principal antes de subir o
+servidor (symlink não serve: o lakebed ignora arquivos que não são regulares —
+ver `docs/lakebed.md`).
+
 ## Deploy
 
 ```sh
