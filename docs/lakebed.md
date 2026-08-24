@@ -79,17 +79,46 @@ Resultado medido:
 
 Conclusões:
 
-- **Mundo (b)**: a transação serializa as escritas, mas NÃO o trecho
+- **Resultado**: a transação serializa as escritas, mas NÃO o trecho
   ler→checar→gravar — escritores simultâneos observam a linha velha e passam
   juntos pela checagem. O escape escala com a concorrência (~2 em 10,
-  ~4 em 25) e rajadas altas produzem 500 de lock timeout.
+  ~4 em 25) e rajadas altas PODEM produzir 500 por timeout de lock (observado
+  em 1 de 2 rodadas com k=25).
 - Consequência para a guarda de idade mínima: ela é **contenção parcial**,
-  não teto. Reduz a rajada a uma fração (medido ÷5), mas não garante delta
-  único; a projeção de cota usa o pior caso medido, não o teto teórico de
-  720/dia.
+  não teto. Reduz a rajada a uma fração (medido ÷5); a projeção de cota usa o
+  pior caso medido.
 - Delta = 1 só com compare-and-swap real (índice único ou update condicional),
   que o runtime v0.0.29 não expõe. Se a pressão de cota um dia aparecer, CAS
   é a escalada — meio-termo não existe.
+
+### Probe rodada 2 — releitura de confirmação e jitter (24/08)
+
+Hipótese testada: reler a linha imediatamente antes do `update` fecharia a
+janela de corrida (os 8 recusados das rajadas originais viram a linha nova,
+sugerindo visibilidade de commits recentes dentro da transação).
+
+Variantes medidas contra a mesma capsule (semeadura + espera + K POSTs
+paralelos):
+
+| Variante | k=10 | k=25 |
+|---|---|---|
+| guarda simples (referência) | sempre 2 escritas | 4 escritas |
+| + espera 400 ms simulando login + releitura antes do update | 1–2 escritas (maioria 2) | 3–4 (+500 em 1 rodada) |
+| + jitter aleatório de até 150 ms na espera | sempre 2 escritas | — |
+
+Conclusões da rodada 2:
+
+- A releitura NÃO elimina o escape: o par simultâneo roda em **paralelo
+  verdadeiro** — nenhum dos dois vê o commit do outro, não importa onde a
+  releitura esteja. Os recusados enxergam a linha nova porque entram
+  depois, não porque leem por cima do irmão.
+- Jitter anti-alinhamento também não moveu o número: o par escapa junto
+  porque executa junto, não porque chegou junto.
+- Em produção a janela crítica é ainda menor: o caminho lento (login SPTrans)
+  acontece ANTES de `gravar`, cuja primeira leitura já nasce fresca — dois
+  requests só escapam se os logins terminarem alinhados em milissegundos.
+- Veredicto: contenção parcial da guarda é o máximo alcançável sem CAS;
+  nem releitura nem jitter justificam entrada no código.
 
 ## Restrições da capsule (v0.0.29)
 

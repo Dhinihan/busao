@@ -137,6 +137,8 @@ export function criarClienteOlhoVivo(opcoes: ClienteOlhoVivoOpcoes): ClienteOlho
         const vigente = await guardarSessao(atual);
         if (!cookiesRejeitados.has(vigente.cookie)) {
           atual = vigente;
+        } else {
+          sessaoMemoria = atual;
         }
       }
       let resposta: Response;
