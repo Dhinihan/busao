@@ -1,0 +1,15 @@
+{
+  // Serviço de quadro de horários do busão.
+  // Deploy: npx wrangler deploy   (a partir desta pasta)
+  "name": "busao-horarios",
+  "main": "index.ts",
+  "compatibility_date": "2026-08-24",
+  "account_id": "86393e09cfcc2cc3b410998322fad999",
+  "d1_databases": [
+    {
+      "binding": "busao_horarios",
+      "database_name": "busao-horarios",
+      "database_id": "3e096531-2443-4d8d-92c9-9961240c8b8a"
+    }
+  ]
+}
