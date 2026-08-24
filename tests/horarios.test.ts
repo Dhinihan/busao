@@ -20,6 +20,7 @@ test("minutosDaPartida valida HH:MM", () => {
   assert.equal(minutosDaPartida("00:00"), 0);
   assert.equal(minutosDaPartida("24:00"), null);
   assert.equal(minutosDaPartida("12:60"), null);
+  assert.equal(minutosDaPartida("12:34:56"), null);
   assert.equal(minutosDaPartida("xx:yy"), null);
   assert.equal(minutosDaPartida("7"), null);
 });
