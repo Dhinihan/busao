@@ -2,7 +2,12 @@ import { useEffect, useState } from "preact/hooks";
 import { api, ErroApi } from "./api";
 import { Estrela } from "./Estrela";
 import { Mapa } from "./Mapa";
-import { useFavoritas, usePosicoesVarias, useValorPostergado } from "./hooks";
+import {
+  useFavoritas,
+  usePosicoesVarias,
+  useRotasVarias,
+  useValorPostergado,
+} from "./hooks";
 import type { Linha, StatusApi } from "../shared/tipos.ts";
 
 const rotulo =
@@ -35,6 +40,7 @@ export function App() {
   const [avisoDispensado, setAvisoDispensado] = useState(false);
 
   const posicoes = usePosicoesVarias(rastreadas.map((l) => l.id));
+  const rotas = useRotasVarias(rastreadas);
   const { favoritas, alternar, tem } = useFavoritas();
   const termoPostergado = useValorPostergado(termoBusca.trim(), 350);
 
@@ -170,6 +176,7 @@ export function App() {
                 {rastreadas.map((l) => {
                   const estadoLinha = posicoes[l.id];
                   const dados = estadoLinha?.dados ?? null;
+                  const erroRota = rotas[l.id]?.erro;
                   return (
                     <p
                       key={l.id}
@@ -196,6 +203,11 @@ export function App() {
                             {dados.veiculos.length} ônibus
                           </span>
                         </>
+                      )}
+                      {erroRota !== null && erroRota !== undefined && (
+                        <span className="text-[#bf3b2b]">
+                          trajeto indisponível
+                        </span>
                       )}
                     </p>
                   );
@@ -303,7 +315,7 @@ export function App() {
       </aside>
 
       <main className="relative flex h-[44dvh] shrink-0 md:h-dvh">
-        <Mapa linhas={rastreadas} posicoes={posicoes} />
+        <Mapa linhas={rastreadas} posicoes={posicoes} rotas={rotas} />
 
         {rastreadas.length === 0 && !avisoDispensado && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center">
@@ -339,4 +351,3 @@ export function App() {
     </div>
   );
 }
-

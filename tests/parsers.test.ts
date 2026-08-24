@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { paraLinha, paraPosicoes } from "../shared/parsers.ts";
+import {
+  paraLinha,
+  paraPosicoes,
+  paraRotaGeoSampa,
+} from "../shared/parsers.ts";
 import { mensagemDeErro } from "../shared/mensagens.ts";
 
 test("paraLinha mapeia um registro completo", () => {
@@ -95,6 +99,51 @@ test("paraPosicoes devolve nulo sem lista de veículos", () => {
   assert.equal(paraPosicoes(null), null);
   assert.equal(paraPosicoes({}), null);
   assert.equal(paraPosicoes({ hr: "19:00", vs: "tudo" }), null);
+});
+
+test("paraRotaGeoSampa converte as geometrias e filtra coordenadas inválidas", () => {
+  assert.deepEqual(
+    paraRotaGeoSampa({
+      features: [
+        {
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [-46.63, -23.55],
+              ["quebrado", -23.56],
+              [-46.65, -23.57],
+            ],
+          },
+        },
+        {
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [-46.70, -23.60],
+              [-46.71, -23.61],
+            ],
+          },
+        },
+      ],
+    }),
+    {
+      trechos: [
+        [
+          { lat: -23.55, lng: -46.63 },
+          { lat: -23.57, lng: -46.65 },
+        ],
+        [
+          { lat: -23.60, lng: -46.70 },
+          { lat: -23.61, lng: -46.71 },
+        ],
+      ],
+    },
+  );
+});
+
+test("paraRotaGeoSampa rejeita resposta sem geometrias", () => {
+  assert.equal(paraRotaGeoSampa(null), null);
+  assert.equal(paraRotaGeoSampa({ features: [] }), null);
 });
 
 const MENSAGEM_RECUSA =

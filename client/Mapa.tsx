@@ -10,7 +10,11 @@ import {
   type Pixel,
   type Ponto,
 } from "../shared/tile-math";
-import { useLocalizacao, type EstadoPosicoes } from "./hooks";
+import {
+  useLocalizacao,
+  type EstadoPosicoes,
+  type EstadoRota,
+} from "./hooks";
 import type { Linha } from "../shared/tipos.ts";
 
 const ZOOM_MINIMO = 0;
@@ -19,11 +23,15 @@ const ZOOM_MAXIMO = 18;
 const pontoVivoMapa =
   "h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#0a6b3c] motion-reduce:animate-none";
 
+const CORES_ROTAS = ["#1d4ed8", "#7c3aed", "#0f766e", "#b45309"] satisfies
+  readonly string[];
+
 export function Mapa(props: {
   linhas: readonly Linha[];
   posicoes: Readonly<Record<number, EstadoPosicoes>>;
+  rotas: Readonly<Record<number, EstadoRota>>;
 }) {
-  const { linhas, posicoes } = props;
+  const { linhas, posicoes, rotas } = props;
   const variasLinhas = linhas.length > 1;
 
   const [quadro, setQuadro] = useState<Ponto & { zoom: number }>({
@@ -68,23 +76,27 @@ export function Mapa(props: {
       return;
     }
     if (tamanho.largura === 0) return;
-    // Enquadra só a linha mais recente que chegou com ônibus; as demais
-    // continuam visíveis onde estiverem.
+    // Enquadra só a linha mais recente que chegou com trajeto ou ônibus; as
+    // demais continuam visíveis onde estiverem.
     for (let i = linhas.length - 1; i >= 0; i--) {
       const id = linhas[i]?.id;
       if (id === undefined || enquadrouAte.current.has(id)) continue;
+      const estadoRota = rotas[id];
+      if (estadoRota === undefined) continue;
+      const pontosRota = estadoRota.dados?.trechos.flat() ?? [];
       const veiculos = posicoes[id]?.dados?.veiculos;
-      if (veiculos === undefined || veiculos.length === 0) continue;
+      const pontos = pontosRota.length > 0 ? pontosRota : (veiculos ?? []);
+      if (pontos.length === 0) continue;
       enquadrouAte.current.add(id);
       setQuadro(
-        enquadrarPontos(veiculos, {
+        enquadrarPontos(pontos, {
           largura: tamanho.largura,
           altura: tamanho.altura,
         }),
       );
       break;
     }
-  }, [linhas, posicoes, tamanho.largura, tamanho.altura]);
+  }, [linhas, posicoes, rotas, tamanho.largura, tamanho.altura]);
 
   useEffect(() => {
     if (!localizacao.ativa) centralizouRef.current = false;
@@ -121,6 +133,7 @@ export function Mapa(props: {
     if (ativos.length === 2) {
       arrasteRef.current = null;
       const [a, b] = ativos;
+      if (a === undefined || b === undefined) return;
       const meio = meioEntre(a, b);
       gestoRef.current = {
         distanciaInicial: Math.hypot(a.x - b.x, a.y - b.y),
@@ -152,6 +165,7 @@ export function Mapa(props: {
       const gesto = gestoRef.current;
       if (gesto === null || tamanho.largura === 0) return;
       const [a, b] = ativos;
+      if (a === undefined || b === undefined) return;
       const distancia = Math.hypot(a.x - b.x, a.y - b.y);
       if (distancia <= 0) return;
       const zoom = limitarZoom(
@@ -229,6 +243,57 @@ export function Mapa(props: {
           }}
         />
       ))}
+
+      {tamanho.largura > 0 && tamanho.altura > 0 && (
+        <svg
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 h-full w-full"
+          preserveAspectRatio="none"
+          viewBox={`0 0 ${tamanho.largura} ${tamanho.altura}`}
+        >
+          {linhas.map((linha, indice) => {
+            const trechos = rotas[linha.id]?.dados?.trechos ?? [];
+            const cor =
+              CORES_ROTAS[indice % CORES_ROTAS.length] ?? "#1d4ed8";
+            return trechos.map((trecho, trechoIndice) => {
+              if (trecho.length < 2) return null;
+              const pontosNaTela = trecho.map((ponto) =>
+                pontoParaPixelDeTela(ponto, {
+                  centro: quadro,
+                  zoom: quadro.zoom,
+                  largura: tamanho.largura,
+                  altura: tamanho.altura,
+                }),
+              );
+              const pontosSvg = pontosNaTela
+                .map((ponto) => `${ponto.x},${ponto.y}`)
+                .join(" ");
+              return (
+                <g key={`rota-${linha.id}-${trechoIndice}`}>
+                  <polyline
+                    fill="none"
+                    points={pontosSvg}
+                    stroke="#fbfbfa"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="8"
+                    opacity="0.9"
+                  />
+                  <polyline
+                    fill="none"
+                    points={pontosSvg}
+                    stroke={cor}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="4"
+                    opacity="0.85"
+                  />
+                </g>
+              );
+            });
+          })}
+        </svg>
+      )}
 
       {linhas.map((linha) => {
         const veiculos = posicoes[linha.id]?.dados?.veiculos ?? [];

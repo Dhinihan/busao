@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { api, ErroApi } from "./api";
 import { ehLinha } from "../shared/parsers.ts";
-import type { Linha, PosicoesDaLinha } from "../shared/tipos.ts";
+import type { Linha, PosicoesDaLinha, RotaDaLinha } from "../shared/tipos.ts";
 
 export function useValorPostergado<T>(valor: T, atrasoMs: number): T {
   const [postergado, setPostergado] = useState(valor);
@@ -158,6 +158,84 @@ export function usePosicoesVarias(
   for (const id of ids) {
     const estado = porId[id];
     if (estado !== undefined) vivas[id] = estado;
+  }
+  return vivas;
+}
+
+export type EstadoRota = {
+  readonly dados: RotaDaLinha | null;
+  readonly erro: string | null;
+};
+
+const TIMEOUT_ROTA_MS = 8_000;
+
+export function useRotasVarias(
+  linhas: readonly Linha[],
+): Readonly<Record<number, EstadoRota>> {
+  const [porId, setPorId] = useState<
+    Readonly<Record<number, EstadoRota>>
+  >({});
+  const chave = [...linhas]
+    .sort((a, b) => a.id - b.id)
+    .map((linha) => `${linha.id}:${linha.letreiro}`)
+    .join(",");
+
+  useEffect(() => {
+    const alvos = [...linhas].sort((a, b) => a.id - b.id);
+    if (alvos.length === 0) return;
+
+    let cancelado = false;
+    const controles = new Map<number, AbortController>();
+
+    const consultar = async (linha: Linha): Promise<void> => {
+      const controle = new AbortController();
+      controles.set(linha.id, controle);
+      const tempoEsgotado = window.setTimeout(
+        () => controle.abort(),
+        TIMEOUT_ROTA_MS,
+      );
+      try {
+        const dados = await api.rota(linha.id, linha.letreiro, {
+          sinal: controle.signal,
+        });
+        if (!cancelado) {
+          setPorId((atual) => ({
+            ...atual,
+            [linha.id]: { dados, erro: null },
+          }));
+        }
+      } catch (erro) {
+        if (!cancelado) {
+          const mensagem =
+            erro instanceof ErroApi
+              ? erro.message
+              : "não foi possível carregar o trajeto";
+          setPorId((atual) => ({
+            ...atual,
+            [linha.id]: { dados: null, erro: mensagem },
+          }));
+        }
+      } finally {
+        window.clearTimeout(tempoEsgotado);
+      }
+    };
+
+    // Uma linha já resolvida não deve ser buscada de novo só porque outra foi adicionada.
+    for (const linha of alvos) {
+      if (porId[linha.id] !== undefined) continue;
+      void consultar(linha);
+    }
+
+    return () => {
+      cancelado = true;
+      for (const controle of controles.values()) controle.abort();
+    };
+  }, [chave]);
+
+  const vivas: Record<number, EstadoRota> = {};
+  for (const linha of linhas) {
+    const estado = porId[linha.id];
+    if (estado !== undefined) vivas[linha.id] = estado;
   }
   return vivas;
 }

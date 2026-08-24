@@ -5,6 +5,7 @@ import {
   interpretarSessao,
   type Sessao,
 } from "./olhovivo.ts";
+import { criarClienteGeoSampa, ErroGeoSampa } from "./geosampa.ts";
 import { criarEstadoDb, type LinhaEstado } from "./estado-db.ts";
 import { criarCachePosicoes } from "./cache-posicoes.ts";
 import {
@@ -67,6 +68,8 @@ const olhovivo = criarClienteOlhoVivo({
   gravarSessao: gravarSessaoDb,
 });
 
+const geosampa = criarClienteGeoSampa();
+
 const cachePosicoes = criarCachePosicoes({
   buscar: (linhaId) => olhovivo.posicoesDaLinha(linhaId),
   aoRegistrar: (linhaId, resultado) => {
@@ -75,7 +78,7 @@ const cachePosicoes = criarCachePosicoes({
 });
 
 function respostaDeErro(erro: unknown) {
-  if (erro instanceof ErroOlhoVivo) {
+  if (erro instanceof ErroOlhoVivo || erro instanceof ErroGeoSampa) {
     return json({ erro: erro.message }, { status: 502 });
   }
   const nome = erro instanceof Error ? erro.name : typeof erro;
@@ -124,6 +127,23 @@ export default capsule({
         }
         try {
           return json(await cachePosicoes.obter(id));
+        } catch (erro) {
+          return respostaDeErro(erro);
+        }
+      },
+    ),
+
+    rota: endpoint(
+      { method: "GET", path: "/api/rota" },
+      async (ctx, req) => {
+        preparar(ctx);
+        const id = Number(req.query.get("linha") ?? "");
+        const letreiro = (req.query.get("letreiro") ?? "").trim();
+        if (!idLinhaValido(id) || letreiro === "") {
+          return json({ erro: MENSAGEM_LINHA_INVALIDA }, { status: 400 });
+        }
+        try {
+          return json(await geosampa.rotaDaLinha(letreiro));
         } catch (erro) {
           return respostaDeErro(erro);
         }

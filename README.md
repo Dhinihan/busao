@@ -4,6 +4,7 @@ Site minimalista para acompanhar em tempo real onde estão os ônibus das linhas
 
 - Busca de linhas por **número** (`8000`, `N106`) ou **nome** (`Paulista`)
 - Posições dos ônibus em **mapa ao vivo** (atualização a cada 10 s)
+- Trajeto completo da linha desenhado pela geometria oficial do GeoSampa
 - **Favoritas** salvas no navegador (localStorage)
 - Rastreamento da posição do usuário (`watchPosition`, persistido)
 
@@ -59,9 +60,10 @@ deployar a partir de um clone fresco, senão o deploy sobe sem token.
 ```
 client/           app Preact: busca, favoritas, polling, mapa slippy próprio
 shared/           tipos, parsers e validadores usados por servidor e cliente
-server/index.ts   capsule Lakebed: endpoints /api/status|linhas|posicoes,
-                  sessão SPTrans no banco, cache de posições em memória
+server/index.ts   capsule Lakebed: endpoints /api/status|linhas|posicoes|rota,
+                  sessão SPTrans no banco, cache de posições e rotas em memória
 server/olhovivo.ts    cliente Olho Vivo (login por cookie, hooks de sessão)
+server/geosampa.ts    cliente da geometria oficial das linhas
 tests/            node:test do contrato SPTrans, cache, tile-math e api cliente
 docs/lakebed.md   restrições, limites e comportamento do runtime Lakebed
 ```

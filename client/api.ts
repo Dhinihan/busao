@@ -1,8 +1,14 @@
 import { mensagemDeErro } from "../shared/mensagens.ts";
-import { ehLinha, ehStatus, paraPosicoesDoCliente } from "../shared/parsers.ts";
+import {
+  ehLinha,
+  ehStatus,
+  paraPosicoesDoCliente,
+  paraRotaDoCliente,
+} from "../shared/parsers.ts";
 import type {
   Linha,
   PosicoesDaLinha,
+  RotaDaLinha,
   StatusApi,
 } from "../shared/tipos.ts";
 
@@ -48,6 +54,24 @@ export const api = {
     const dados = paraPosicoesDoCliente(corpo);
     if (dados === null) {
       throw new ErroApi("resposta de posições inválida");
+    }
+    return dados;
+  },
+
+  async rota(
+    codigoLinha: number,
+    letreiro: string,
+    opcoes: { readonly sinal?: AbortSignal } = {},
+  ): Promise<RotaDaLinha> {
+    const init =
+      opcoes.sinal !== undefined ? { signal: opcoes.sinal } : undefined;
+    const corpo = await obterCorpo(
+      `/api/rota?linha=${codigoLinha}&letreiro=${encodeURIComponent(letreiro)}`,
+      init,
+    );
+    const dados = paraRotaDoCliente(corpo);
+    if (dados === null) {
+      throw new ErroApi("resposta de trajeto inválida");
     }
     return dados;
   },

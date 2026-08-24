@@ -6,6 +6,7 @@
   "include": [
     "shared",
     "server/olhovivo.ts",
+    "server/geosampa.ts",
     "server/cache-posicoes.ts",
     "server/estado-db.ts",
     "client/api.ts",

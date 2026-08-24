@@ -1,5 +1,5 @@
-import type { Linha, PosicoesDaLinha } from "../shared/tipos.ts";
 import { paraLinha, paraPosicoes } from "../shared/parsers.ts";
+import type { Linha, PosicoesDaLinha } from "../shared/tipos.ts";
 
 const API_BASE = "https://api.olhovivo.sptrans.com.br/v2.1";
 
