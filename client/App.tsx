@@ -32,6 +32,7 @@ export function App() {
   const [buscando, setBuscando] = useState(false);
   const [erroBusca, setErroBusca] = useState<string | null>(null);
   const [rastreadas, setRastreadas] = useState<readonly Linha[]>([]);
+  const [avisoDispensado, setAvisoDispensado] = useState(false);
 
   const posicoes = usePosicoesVarias(rastreadas.map((l) => l.id));
   const { favoritas, alternar, tem } = useFavoritas();
@@ -304,9 +305,28 @@ export function App() {
       <main className="relative flex h-[44dvh] shrink-0 md:h-dvh">
         <Mapa linhas={rastreadas} posicoes={posicoes} />
 
-        {rastreadas.length === 0 && (
+        {rastreadas.length === 0 && !avisoDispensado && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center">
-            <div className="pointer-events-auto max-w-[320px] rounded-2xl bg-[#fbfbfa] px-[30px] py-7 text-center shadow-[0_10px_40px_rgba(23,24,26,0.18)]">
+            <div className="pointer-events-auto relative max-w-[320px] rounded-2xl bg-[#fbfbfa] px-[30px] py-7 text-center shadow-[0_10px_40px_rgba(23,24,26,0.18)]">
+              <button
+                type="button"
+                onClick={() => setAvisoDispensado(true)}
+                aria-label="Dispensar aviso"
+                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg border-0 bg-transparent p-0 text-[#9aa0a6] hover:bg-[#eceeea] hover:text-[#191a1c]"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                >
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
               <Led classe="text-2xl">busão·sp</Led>
               <p className="m-0 mt-3.5 text-sm text-[#66696f]">
                 Busque pelo número ou nome da linha para ver os ônibus em
