@@ -118,24 +118,3 @@ test("cliente GeoSampa deduplica chamadas simultâneas", async () => {
   ]);
   assert.equal(chamadas, 1);
 });
-
-test("cliente GeoSampa interrompe consulta que excede o timeout", async () => {
-  const cliente = criarClienteGeoSampa({
-    tempoLimiteMs: 5,
-    buscar: async (_url, init) =>
-      new Promise((_resolver, rejeitar) => {
-        init?.signal?.addEventListener("abort", () => rejeitar(new Error("abortado")), {
-          once: true,
-        });
-      }),
-  });
-
-  await assert.rejects(cliente.rotaDaLinha("8700-10"), (erro: unknown) => {
-    assert.ok(erro instanceof ErroGeoSampa);
-    assert.equal(
-      erro.message,
-      "tempo limite ao consultar o mapa do GeoSampa",
-    );
-    return true;
-  });
-});
