@@ -1,0 +1,38 @@
+#!/bin/sh
+set -eu
+
+nome=".env.lakebed.server"
+
+principal=$(git worktree list --porcelain | sed -n '1{s/^worktree //p;q;}') || {
+  echo "busao-env: rode de dentro de um checkout do repositório." >&2
+  exit 1
+}
+principal=$(cd "$principal" && pwd -P)
+origem="$principal/$nome"
+
+if [ ! -f "$origem" ]; then
+  echo "busao-env: $origem não existe." >&2
+  echo "Crie-o no checkout principal (README › Token da SPTrans) e rode de novo." >&2
+  exit 1
+fi
+
+aqui=$(pwd -P)
+if [ "$aqui" = "$principal" ]; then
+  echo "busao-env: checkout principal, nada a fazer."
+  exit 0
+fi
+
+caminho="$aqui/$nome"
+
+if [ -L "$caminho" ]; then
+  rm -f "$caminho"
+fi
+
+if [ -f "$caminho" ] && cmp -s "$caminho" "$origem"; then
+  echo "busao-env: $nome já é igual ao do checkout principal."
+  exit 0
+fi
+
+rm -f "$caminho"
+cp -p "$origem" "$caminho"
+echo "busao-env: $nome copiado de $origem"

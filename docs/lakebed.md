@@ -46,6 +46,12 @@ o código não conta. Válido enquanto a versão não mudar.
 
 ## Restrições da capsule (v0.0.29)
 
+- O store de fontes lê o diretório com `readdir({withFileTypes:true})` e pula
+  o que não é `isFile()`: `.env.lakebed.server` precisa ser arquivo **regular**
+  — symlink é silenciosamente ignorado, o servidor sobe sem token e
+  `/api/status` responde `configurado:false`. Por isso o `busao-env` copia em
+  vez de linkar.
+
 - Sem npm arbitrário nem Node built-ins na capsule. Imports permitidos:
   relativos, `lakebed/server`, `lakebed/client` e os módulos Preact providos
   pela plataforma.
