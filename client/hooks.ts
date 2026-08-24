@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
-import { api, ErroApi } from "./api";
+import { api, ErroApi } from "./api.ts";
 import { ehLinha } from "../shared/parsers.ts";
 import type { Linha, PosicoesDaLinha, RotaDaLinha } from "../shared/tipos.ts";
 
@@ -167,6 +167,10 @@ export type EstadoRota = {
   readonly erro: string | null;
 };
 
+export function rotaResolvida(estado: EstadoRota | undefined): boolean {
+  return estado !== undefined && estado.dados !== null;
+}
+
 const TIMEOUT_ROTA_MS = 8_000;
 
 export function useRotasVarias(
@@ -222,7 +226,7 @@ export function useRotasVarias(
 
     // Uma linha já resolvida não deve ser buscada de novo só porque outra foi adicionada.
     for (const linha of alvos) {
-      if (porId[linha.id] !== undefined) continue;
+      if (rotaResolvida(porId[linha.id])) continue;
       void consultar(linha);
     }
 
