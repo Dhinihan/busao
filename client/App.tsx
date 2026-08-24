@@ -101,21 +101,6 @@ export function App() {
           </p>
         )}
 
-        <div>
-          <label className={rotulo} htmlFor="campo-busca">
-            Buscar linha
-          </label>
-          <input
-            id="campo-busca"
-            type="search"
-            placeholder="número ou nome · ex.: 8000 ou Paulista"
-            autoComplete="off"
-            value={termoBusca}
-            onInput={(e) => setTermoBusca((e.target as HTMLInputElement).value)}
-            className="w-full rounded-[10px] border border-[#dcdedb] bg-white px-3.5 py-3 text-[15px] text-[#191a1c] outline-none placeholder:text-[#9aa0a6] focus:border-[#ffb300] focus:ring-2 focus:ring-[#ffb300]"
-          />
-        </div>
-
         {favoritas.length > 0 && (
           <nav aria-label="Linhas favoritas">
             <span className={rotulo}>Favoritas</span>
@@ -152,6 +137,21 @@ export function App() {
             </ul>
           </nav>
         )}
+
+        <div>
+          <label className={rotulo} htmlFor="campo-busca">
+            Buscar linha
+          </label>
+          <input
+            id="campo-busca"
+            type="search"
+            placeholder="número ou nome · ex.: 8000 ou Paulista"
+            autoComplete="off"
+            value={termoBusca}
+            onInput={(e) => setTermoBusca((e.target as HTMLInputElement).value)}
+            className="w-full rounded-[10px] border border-[#dcdedb] bg-white px-3.5 py-3 text-[15px] text-[#191a1c] outline-none placeholder:text-[#9aa0a6] focus:border-[#ffb300] focus:ring-2 focus:ring-[#ffb300]"
+          />
+        </div>
 
         {linhaAtiva !== null && (
           <section
