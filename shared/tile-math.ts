@@ -37,6 +37,7 @@ export type TileVisivel = {
   readonly y: number;
   readonly esquerda: number;
   readonly topo: number;
+  readonly escala: number;
 };
 
 export function deslocarMundo(ponto: Ponto, dx: number, dy: number, zoom: number): Ponto {
@@ -51,12 +52,14 @@ export function tilesVisiveis(opcoes: {
   readonly altura: number;
 }): readonly TileVisivel[] {
   const { centro, zoom, largura, altura } = opcoes;
+  const zoomInteiro = Math.max(0, Math.round(zoom));
+  const escala = Math.pow(2, zoom - zoomInteiro);
   const centroPixel = mundoEmPixel(centro, zoom);
-  const bordaEsquerda = centroPixel.x - largura / 2;
-  const bordaTopo = centroPixel.y - altura / 2;
-  const total = Math.pow(2, zoom);
-  const ultimoPixelX = bordaEsquerda + largura - 1e-9;
-  const ultimoPixelY = bordaTopo + altura - 1e-9;
+  const bordaEsquerda = centroPixel.x / escala - largura / (2 * escala);
+  const bordaTopo = centroPixel.y / escala - altura / (2 * escala);
+  const total = Math.pow(2, zoomInteiro);
+  const ultimoPixelX = bordaEsquerda + largura / escala - 1e-9;
+  const ultimoPixelY = bordaTopo + altura / escala - 1e-9;
   const xInicial = Math.floor(bordaEsquerda / TILE_SIZE);
   const xFinal = Math.floor(ultimoPixelX / TILE_SIZE);
   const yInicial = Math.max(0, Math.floor(bordaTopo / TILE_SIZE));
@@ -66,11 +69,12 @@ export function tilesVisiveis(opcoes: {
     for (let x = xInicial; x <= xFinal; x += 1) {
       const xNormalizado = ((x % total) + total) % total;
       tiles.push({
-        z: zoom,
+        z: zoomInteiro,
         x: xNormalizado,
         y,
-        esquerda: x * TILE_SIZE - bordaEsquerda,
-        topo: y * TILE_SIZE - bordaTopo,
+        esquerda: (x * TILE_SIZE - bordaEsquerda) * escala,
+        topo: (y * TILE_SIZE - bordaTopo) * escala,
+        escala,
       });
     }
   }

@@ -61,8 +61,58 @@ test("bordas produzem os tiles vizinhos alinhados", () => {
     assert.ok(tile.y >= 0 && tile.y < total);
     assert.ok(tile.esquerda > -TILE_SIZE && tile.esquerda < largura);
     assert.ok(tile.topo > -TILE_SIZE && tile.topo < altura);
+    assert.equal(tile.escala, 1);
   }
   assert.equal(tiles.length, 12);
+});
+
+test("zoom inteiro mantém escala 1 e nível igual ao zoom", () => {
+  const tiles = tilesVisiveis({
+    centro: SAO_PAULO,
+    zoom: 13,
+    largura: 375,
+    altura: 500,
+  });
+  assert.ok(tiles.length > 0);
+  for (const tile of tiles) {
+    assert.equal(tile.z, 13);
+    assert.equal(tile.escala, 1);
+    assert.equal(TILE_SIZE * tile.escala, TILE_SIZE);
+  }
+});
+
+test("zoom fracionário usa o nível arredondado e cobre a viewport", () => {
+  const largura = 375;
+  const altura = 500;
+  for (const zoom of [12.3, 13.5, 15.8]) {
+    const tiles = tilesVisiveis({ centro: SAO_PAULO, zoom, largura, altura });
+    assert.ok(tiles.length > 0);
+    let minEsquerda = Infinity;
+    let minTopo = Infinity;
+    let maxDireita = -Infinity;
+    let maxFundo = -Infinity;
+    for (const tile of tiles) {
+      assert.equal(tile.z, Math.round(zoom));
+      assert.ok(
+        Math.abs(tile.escala - Math.pow(2, zoom - Math.round(zoom))) < 1e-9,
+      );
+      minEsquerda = Math.min(minEsquerda, tile.esquerda);
+      minTopo = Math.min(minTopo, tile.topo);
+      maxDireita = Math.max(maxDireita, tile.esquerda + TILE_SIZE * tile.escala);
+      maxFundo = Math.max(maxFundo, tile.topo + TILE_SIZE * tile.escala);
+    }
+    assert.ok(minEsquerda <= 0, `esquerda z${zoom}`);
+    assert.ok(minTopo <= 0, `topo z${zoom}`);
+    assert.ok(maxDireita >= largura, `direita z${zoom}`);
+    assert.ok(maxFundo >= altura, `fundo z${zoom}`);
+  }
+});
+
+test("pinçar dobra a distância e sobe um nível de zoom no mundo em pixel", () => {
+  const base = mundoEmPixel(SAO_PAULO, 12);
+  const dobrado = mundoEmPixel(SAO_PAULO, 13);
+  assert.ok(Math.abs(dobrado.x - base.x * 2) < 1e-6);
+  assert.ok(Math.abs(dobrado.y - base.y * 2) < 1e-6);
 });
 
 test("arrasto de pixels converte de volta no mesmo lugar", () => {

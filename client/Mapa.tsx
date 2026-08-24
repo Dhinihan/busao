@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
+  TILE_SIZE,
   deslocarMundo,
   enquadrarPontos,
+  mundoEmPixel,
+  pixelEmMundo,
   pontoParaPixelDeTela,
   tilesVisiveis,
+  type Pixel,
   type Ponto,
 } from "../shared/tile-math";
 import { useLocalizacao, type EstadoPosicoes } from "./hooks";
@@ -33,6 +37,12 @@ export function Mapa(props: {
     x: number;
     y: number;
     centro: Ponto;
+  } | null>(null);
+  const ponteirosRef = useRef<Map<number, Pixel>>(new Map());
+  const gestoRef = useRef<{
+    distanciaInicial: number;
+    zoomInicial: number;
+    ancora: Ponto;
   } | null>(null);
   const enquadrouAte = useRef<number | null>(null);
   const centralizouRef = useRef(false);
@@ -80,31 +90,95 @@ export function Mapa(props: {
     }));
   }, [localizacao.estado.ponto]);
 
+  function posicaoLocal(evento: PointerEvent): Pixel {
+    const retangulo = (
+      evento.currentTarget as HTMLElement
+    ).getBoundingClientRect();
+    return {
+      x: evento.clientX - retangulo.left,
+      y: evento.clientY - retangulo.top,
+    };
+  }
+
   function aoPressionar(evento: PointerEvent) {
     const alvo = evento.target as HTMLElement | null;
     if (alvo !== null && alvo.closest("button, a") !== null) return;
     evento.preventDefault();
     (evento.currentTarget as HTMLElement).setPointerCapture(evento.pointerId);
-    arrasteRef.current = { x: evento.clientX, y: evento.clientY, centro: quadro };
+    ponteirosRef.current.set(evento.pointerId, posicaoLocal(evento));
+    const ativos = [...ponteirosRef.current.values()];
+    if (ativos.length === 2) {
+      arrasteRef.current = null;
+      const [a, b] = ativos;
+      const meio = meioEntre(a, b);
+      gestoRef.current = {
+        distanciaInicial: Math.hypot(a.x - b.x, a.y - b.y),
+        zoomInicial: quadro.zoom,
+        ancora: deslocarMundo(
+          quadro,
+          meio.x - tamanho.largura / 2,
+          meio.y - tamanho.altura / 2,
+          quadro.zoom,
+        ),
+      };
+      return;
+    }
+    if (ativos.length === 1) {
+      arrasteRef.current = {
+        x: evento.clientX,
+        y: evento.clientY,
+        centro: quadro,
+      };
+    }
   }
 
   function aoArrastar(evento: PointerEvent) {
+    if (!ponteirosRef.current.has(evento.pointerId)) return;
+    const local = posicaoLocal(evento);
+    ponteirosRef.current.set(evento.pointerId, local);
+    const ativos = [...ponteirosRef.current.values()];
+    if (ativos.length >= 2) {
+      const gesto = gestoRef.current;
+      if (gesto === null || tamanho.largura === 0) return;
+      const [a, b] = ativos;
+      const distancia = Math.hypot(a.x - b.x, a.y - b.y);
+      if (distancia <= 0) return;
+      const zoom = limitarZoom(
+        gesto.zoomInicial + Math.log2(distancia / gesto.distanciaInicial),
+      );
+      const meio = meioEntre(a, b);
+      const ancoraPixel = mundoEmPixel(gesto.ancora, zoom);
+      const centroPixel = {
+        x: ancoraPixel.x - (meio.x - tamanho.largura / 2),
+        y: ancoraPixel.y - (meio.y - tamanho.altura / 2),
+      };
+      setQuadro({ ...pixelEmMundo(centroPixel, zoom), zoom });
+      return;
+    }
     const arraste = arrasteRef.current;
     if (arraste === null) return;
-    const dx = evento.clientX - arraste.x;
-    const dy = evento.clientY - arraste.y;
+    const dx = local.x - arraste.x;
+    const dy = local.y - arraste.y;
     const novo = deslocarMundo(arraste.centro, -dx, -dy, quadro.zoom);
     setQuadro({ ...novo, zoom: quadro.zoom });
   }
 
-  function aoSoltar() {
-    arrasteRef.current = null;
+  function aoSoltar(evento: PointerEvent) {
+    ponteirosRef.current.delete(evento.pointerId);
+    const restantes = [...ponteirosRef.current.values()];
+    if (restantes.length < 2 && gestoRef.current !== null) {
+      gestoRef.current = null;
+      setQuadro((atual) => ({ ...atual, zoom: Math.round(atual.zoom) }));
+    }
+    const unico = restantes[0];
+    arrasteRef.current =
+      unico === undefined ? null : { x: unico.x, y: unico.y, centro: quadro };
   }
 
   function alternarZoom(delta: number) {
     setQuadro((atual) => ({
       ...atual,
-      zoom: Math.min(ZOOM_MAXIMO, Math.max(ZOOM_MINIMO, atual.zoom + delta)),
+      zoom: limitarZoom(atual.zoom + delta),
     }));
   }
 
@@ -138,8 +212,8 @@ export function Mapa(props: {
             position: "absolute",
             left: `${tile.esquerda}px`,
             top: `${tile.topo}px`,
-            width: "256px",
-            height: "256px",
+            width: `${TILE_SIZE * tile.escala}px`,
+            height: `${TILE_SIZE * tile.escala}px`,
             filter: "grayscale(1) contrast(1.05) brightness(1.02)",
           }}
         />
@@ -253,4 +327,12 @@ export function Mapa(props: {
 
 function pontoParaQuadro(ponto: readonly [number, number]): Ponto {
   return { lat: ponto[0], lng: ponto[1] };
+}
+
+function meioEntre(a: Pixel, b: Pixel): Pixel {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
+function limitarZoom(zoom: number): number {
+  return Math.min(ZOOM_MAXIMO, Math.max(ZOOM_MINIMO, zoom));
 }
