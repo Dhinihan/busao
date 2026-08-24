@@ -89,15 +89,26 @@ export function usePosicoesVarias(
     if (alvos.length === 0) return;
 
     let cancelado = false;
-    const emVoo = new Set<number>();
-    const controles = new Map<number, AbortController>();
-    const timers = new Map<number, number>();
+    let timer: number | undefined;
+    let controleAtual: AbortController | null = null;
+    let despertar: (() => void) | null = null;
+
+    const aguardarVisibilidade = (): Promise<void> =>
+      new Promise((resolver) => {
+        despertar = () => {
+          despertar = null;
+          resolver();
+        };
+      });
+
+    const esperar = (ms: number): Promise<void> =>
+      new Promise((resolver) => {
+        timer = window.setTimeout(resolver, ms);
+      });
 
     const consultar = async (id: number): Promise<void> => {
-      if (emVoo.has(id)) return;
-      emVoo.add(id);
       const controle = new AbortController();
-      controles.set(id, controle);
+      controleAtual = controle;
       const tempoEsgotado = window.setTimeout(
         () => controle.abort(),
         TIMEOUT_MS,
@@ -126,29 +137,43 @@ export function usePosicoesVarias(
         }
       } finally {
         window.clearTimeout(tempoEsgotado);
-        emVoo.delete(id);
-        if (!cancelado && !document.hidden) {
-          timers.set(
-            id,
-            window.setTimeout(() => void consultar(id), INTERVALO_MS),
-          );
+      }
+    };
+
+    // Poll sequencial (round-robin): no máximo 1 request em voo por
+    // dispositivo. Polls paralelos contra um cookie de sessão morto fazem
+    // cada request relogar na SPTrans e gravar no DB — a rajada queimou a
+    // cota diária de mutations da capsule (ver docs/lakebed.md).
+    const laco = async (): Promise<void> => {
+      while (!cancelado) {
+        if (document.hidden) {
+          await aguardarVisibilidade();
+          continue;
+        }
+        const inicioRodada = Date.now();
+        for (const id of alvos) {
+          if (cancelado || document.hidden) break;
+          await consultar(id);
+        }
+        const resto = INTERVALO_MS - (Date.now() - inicioRodada);
+        if (!cancelado && !document.hidden && resto > 0) {
+          await esperar(resto);
         }
       }
     };
 
     const aoMudarVisibilidade = (): void => {
-      for (const timer of timers.values()) window.clearTimeout(timer);
-      timers.clear();
-      if (!document.hidden) for (const id of alvos) void consultar(id);
+      if (!document.hidden) despertar?.();
     };
 
     document.addEventListener("visibilitychange", aoMudarVisibilidade);
-    for (const id of alvos) void consultar(id);
+    void laco();
 
     return () => {
       cancelado = true;
-      for (const timer of timers.values()) window.clearTimeout(timer);
-      for (const controle of controles.values()) controle.abort();
+      window.clearTimeout(timer);
+      controleAtual?.abort();
+      despertar?.();
       document.removeEventListener("visibilitychange", aoMudarVisibilidade);
     };
   }, [chave]);
