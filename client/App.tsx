@@ -1,7 +1,8 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { api, ErroApi } from "./api";
 import { Estrela } from "./Estrela";
 import { Mapa } from "./Mapa";
+import { PainelHorarios } from "./PainelHorarios";
 import {
   useFavoritas,
   usePosicoesVarias,
@@ -38,6 +39,53 @@ export function App() {
   const [erroBusca, setErroBusca] = useState<string | null>(null);
   const [rastreadas, setRastreadas] = useState<readonly Linha[]>([]);
   const [avisoDispensado, setAvisoDispensado] = useState(false);
+  const [painel, setPainel] = useState<Linha | null>(null);
+
+  const pressao = useRef<{
+    timer: number | null;
+    x: number;
+    y: number;
+    disparou: boolean;
+  }>({ timer: null, x: 0, y: 0, disparou: false });
+
+  function iniciarPressao(linha: Linha, evento: PointerEvent): void {
+    cancelarPressao();
+    const x = evento.clientX;
+    const y = evento.clientY;
+    pressao.current = {
+      timer: window.setTimeout(() => {
+        pressao.current.timer = null;
+        pressao.current.disparou = true;
+        try {
+          navigator.vibrate?.(15);
+        } catch {
+          /* vibração é opcional */
+        }
+        setPainel(linha);
+      }, 450),
+      x,
+      y,
+      disparou: false,
+    };
+  }
+
+  function moverPressao(evento: PointerEvent): void {
+    const atual = pressao.current;
+    if (
+      atual.timer !== null &&
+      (Math.abs(evento.clientX - atual.x) > 10 ||
+        Math.abs(evento.clientY - atual.y) > 10)
+    ) {
+      cancelarPressao();
+    }
+  }
+
+  function cancelarPressao(): void {
+    if (pressao.current.timer !== null) {
+      window.clearTimeout(pressao.current.timer);
+      pressao.current.timer = null;
+    }
+  }
 
   const posicoes = usePosicoesVarias(rastreadas.map((l) => l.id));
   const rotas = useRotasVarias(rastreadas);
@@ -129,7 +177,18 @@ export function App() {
                 <li key={c.id} className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => alternarRastreamento(c)}
+                    onPointerDown={(e) => iniciarPressao(c, e)}
+                    onPointerUp={cancelarPressao}
+                    onPointerLeave={cancelarPressao}
+                    onPointerMove={(e) => moverPressao(e)}
+                    onContextMenu={(e) => e.preventDefault()}
+                    onClick={() => {
+                      if (pressao.current.disparou) {
+                        pressao.current.disparou = false;
+                        return;
+                      }
+                      alternarRastreamento(c);
+                    }}
                     aria-pressed={estaRastreando(c.id)}
                     aria-label={
                       estaRastreando(c.id)
@@ -137,7 +196,7 @@ export function App() {
                         : `Rastrear ${c.letreiro} no mapa`
                     }
                     className={
-                      "-mx-1 my-0 flex flex-col items-start rounded-lg bg-gradient-to-b from-[#201e19] to-[#131211] px-3.5 py-1.5 cursor-pointer border-0 " +
+                      "-mx-1 my-0 flex flex-col items-start rounded-lg bg-gradient-to-b from-[#201e19] to-[#131211] px-3.5 py-1.5 cursor-pointer border-0 select-none [-webkit-touch-callout:none] " +
                       (estaRastreando(c.id)
                         ? "shadow-[inset_0_0_14px_rgba(255,179,0,0.16),0_0_0_2px_#fbfbfa,0_0_0_4px_#ffb300]"
                         : "")
@@ -346,6 +405,9 @@ export function App() {
               </p>
             </div>
           </div>
+        )}
+        {painel !== null && (
+          <PainelHorarios linha={painel} aoFechar={() => setPainel(null)} />
         )}
       </main>
     </div>

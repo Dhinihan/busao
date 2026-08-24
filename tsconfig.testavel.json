@@ -5,12 +5,15 @@
   },
   "include": [
     "shared",
+    "gtfs/pipeline.ts",
     "server/olhovivo.ts",
     "server/geosampa.ts",
     "server/cache-posicoes.ts",
     "server/estado-db.ts",
     "client/api.ts",
     "client/hooks.ts",
+    "client/horarios.ts",
+    "client/PainelHorarios.tsx",
     "tests"
   ]
 }
