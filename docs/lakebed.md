@@ -60,6 +60,37 @@ o código não conta. Válido enquanto a versão não mudar.
   mutations é a concorrência de requests, não a frequência — qualquer caminho
   que escreva no DB precisa ser à prova de rajada.
 
+### Probe de atomicidade do runtime (24/08, capsule descartável)
+
+Pergunta: o par ler-checar-gravar dentro de um endpoint é efetivamente
+atômico sob concorrência, ou escritores simultâneos leem a mesma versão
+antiga e gravam juntos? Método: capsule descartável com a mesma tabela
+chave/valor e a guarda de idade mínima (`janelaMs` 1.500); semear a chave,
+esperar 2,6 s (linha elegível) e disparar K POSTs paralelos, cada um num
+endpoint próprio (uma transação por request), contando a distribuição de
+resultados.
+
+Resultado medido:
+
+| Rajada | Escritas (`atualizada`) | Recusas (`ignorada`) | HTTP 500 |
+|---|---|---|---|
+| k=10 (3 rodadas) | 2, 2, 2 | 8 cada | 0 |
+| k=25 (2 rodadas) | 4, 4 | 19, 21 | 2, 0 |
+
+Conclusões:
+
+- **Mundo (b)**: a transação serializa as escritas, mas NÃO o trecho
+  ler→checar→gravar — escritores simultâneos observam a linha velha e passam
+  juntos pela checagem. O escape escala com a concorrência (~2 em 10,
+  ~4 em 25) e rajadas altas produzem 500 de lock timeout.
+- Consequência para a guarda de idade mínima: ela é **contenção parcial**,
+  não teto. Reduz a rajada a uma fração (medido ÷5), mas não garante delta
+  único; a projeção de cota usa o pior caso medido, não o teto teórico de
+  720/dia.
+- Delta = 1 só com compare-and-swap real (índice único ou update condicional),
+  que o runtime v0.0.29 não expõe. Se a pressão de cota um dia aparecer, CAS
+  é a escalada — meio-termo não existe.
+
 ## Restrições da capsule (v0.0.29)
 
 - O store de fontes lê o diretório com `readdir({withFileTypes:true})` e pula
