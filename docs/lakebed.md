@@ -25,6 +25,24 @@ o código não conta. Válido enquanto a versão não mudar.
   é o gate de NO-GO da plataforma, não motivo para rate limit ou login. Cache
   reduz upstream, não inbound. Se o uso normal não couber, rollback é
   preferível a limitar o usuário silenciosamente.
+- Toda escrita no DB (insert/update dentro de endpoint) conta na cota de
+  **mutations** (1.000/dia) — mesmo em GET, mesmo sem nenhuma `mutation`
+  definida na capsule. Em 23/08 essa cota estourou (1.143 escritas de sessão)
+  e a plataforma passou a responder 429 para TODOS os requests, incluindo
+  `/api/status` — o cliente interpretou isso como "servidor sem token"
+  (banner falso) e "HTTP 429" nas posições. A sessão SPTrans é a única
+  escrita do app; por isso ela só grava quando o valor muda
+  (`server/estado-db.ts`) e loga cada escrita (`estado: sessao gravada`).
+- Cookie `apiCredentials` da SPTrans (medido em 23/08/2026): vida útil de
+  ~30 min **absolutos** (canário criado 23:17 UTC, morto 23:48 UTC com
+  polling ativo a cada 2 min — não é idle); logins concorrentes com o mesmo
+  token coexistem (um login não invalida o outro); cada login devolve cookie
+  diferente. Com TTL de 30 min, o regime estável é ~2 escritas/hora de app
+  aberto — folga grande contra 1.000/dia. O estouro veio da era
+  pré-persistência (cada request relogava e escrevia).
+- Em dev local o DB é efêmero por boot (cada `lakebed dev` começa sem
+  sessão; reuso entre requests é só pela memória do processo). A reutilização
+  de sessão via DB entre requests só existe no hospedado.
 
 ## Restrições da capsule (v0.0.29)
 

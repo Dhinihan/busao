@@ -5,6 +5,7 @@ import {
   interpretarSessao,
   type Sessao,
 } from "./olhovivo.ts";
+import { criarEstadoDb, type LinhaEstado } from "./estado-db.ts";
 import { criarCachePosicoes } from "./cache-posicoes.ts";
 import {
   MENSAGEM_LINHA_INVALIDA,
@@ -17,47 +18,26 @@ type LogLakebed = {
   info: (mensagem: string, extras?: Record<string, unknown>) => void;
 };
 
-type DbEstado = {
-  estado: {
-    withIndex(
-      nome: "por_chave",
-      alcance: (q: any) => any,
-    ): {
-      first(): Promise<any>;
-    };
-    insert(linha: { chave: string; valor: string }): Promise<any>;
-    update(id: unknown, parcial: { valor?: string }): Promise<unknown>;
-  };
-};
-
 const logMudo: LogLakebed = { info: () => {} };
 
 let tokenAtual: string | null = null;
 let logAtual: LogLakebed = logMudo;
-let dbAtual: DbEstado | null = null;
+let estadoDb = criarEstadoDb(null);
 
 function preparar(ctx: {
   env: Record<string, string | undefined>;
   log: LogLakebed;
-  db: DbEstado;
+  db: Parameters<typeof criarEstadoDb>[0];
 }): void {
   const bruto = ctx.env["OLHOVIVO_TOKEN"];
   tokenAtual = bruto === undefined || bruto.trim() === "" ? null : bruto.trim();
   logAtual = ctx.log ?? logMudo;
-  dbAtual = ctx.db;
-}
-
-async function lerLinha(chave: string): Promise<{ id: unknown; valor: unknown } | null> {
-  const db = dbAtual;
-  if (db === null) return null;
-  return db.estado
-    .withIndex("por_chave", (q) => q.eq("chave", chave))
-    .first();
+  estadoDb = criarEstadoDb(ctx.db);
 }
 
 async function lerSessaoDb(): Promise<Sessao | null> {
   try {
-    const linha = await lerLinha("sessao");
+    const linha: LinhaEstado | null = await estadoDb.ler("sessao");
     return linha === null ? null : interpretarSessao(linha.valor);
   } catch (erro) {
     const nome = erro instanceof Error ? erro.name : typeof erro;
@@ -66,27 +46,16 @@ async function lerSessaoDb(): Promise<Sessao | null> {
   }
 }
 
-async function gravarLinha(
-  chave: string,
-  valor: string,
-): Promise<void> {
-  const db = dbAtual;
-  if (db === null) return;
+async function gravarSessaoDb(sessao: Sessao): Promise<void> {
   try {
-    const existente = await lerLinha(chave);
-    if (existente === null) {
-      await db.estado.insert({ chave, valor });
-    } else {
-      await db.estado.update(existente.id, { valor });
+    const resultado = await estadoDb.gravar("sessao", JSON.stringify(sessao));
+    if (resultado === "criada" || resultado === "atualizada") {
+      logAtual.info("estado: sessao gravada", { resultado });
     }
   } catch (erro) {
     const nome = erro instanceof Error ? erro.name : typeof erro;
-    logAtual.info("estado: escrita ignorada", { chave, tipo: nome });
+    logAtual.info("estado: escrita ignorada", { chave: "sessao", tipo: nome });
   }
-}
-
-async function gravarSessaoDb(sessao: Sessao): Promise<void> {
-  await gravarLinha("sessao", JSON.stringify(sessao));
 }
 
 const olhovivo = criarClienteOlhoVivo({
