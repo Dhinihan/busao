@@ -126,13 +126,18 @@ export function App() {
                     type="button"
                     onClick={() => selecionarLinha(f)}
                     className={
-                      "-mx-1 my-0 inline-block whitespace-nowrap rounded-lg bg-gradient-to-b from-[#201e19] to-[#131211] px-3.5 py-2 font-mono text-[13px] font-black uppercase tracking-[0.08em] text-[#ffb300] cursor-pointer border-0 " +
+                      "-mx-1 my-0 flex flex-col items-start rounded-lg bg-gradient-to-b from-[#201e19] to-[#131211] px-3.5 py-1.5 cursor-pointer border-0 " +
                       (linhaAtiva?.id === f.id
                         ? "shadow-[inset_0_0_14px_rgba(255,179,0,0.16),0_0_0_2px_#fbfbfa,0_0_0_4px_#ffb300]"
                         : "")
                     }
                   >
-                    {f.letreiro}
+                    <span className="font-mono text-[13px] font-black uppercase tracking-[0.08em] text-[#ffb300]">
+                      {f.letreiro}
+                    </span>
+                    <span className="max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-tight text-[#c9c5ba]">
+                      {f.descricao}
+                    </span>
                   </button>
                   <button
                     type="button"
