@@ -60,6 +60,66 @@ o código não conta. Válido enquanto a versão não mudar.
   mutations é a concorrência de requests, não a frequência — qualquer caminho
   que escreva no DB precisa ser à prova de rajada.
 
+### Probe de atomicidade do runtime (24/08, capsule descartável)
+
+Pergunta: o par ler-checar-gravar dentro de um endpoint é efetivamente
+atômico sob concorrência, ou escritores simultâneos leem a mesma versão
+antiga e gravam juntos? Método: capsule descartável com a mesma tabela
+chave/valor e a guarda de idade mínima (`janelaMs` 1.500); semear a chave,
+esperar 2,6 s (linha elegível) e disparar K POSTs paralelos, cada um num
+endpoint próprio (uma transação por request), contando a distribuição de
+resultados.
+
+Resultado medido:
+
+| Rajada | Escritas (`atualizada`) | Recusas (`ignorada`) | HTTP 500 |
+|---|---|---|---|
+| k=10 (3 rodadas) | 2, 2, 2 | 8 cada | 0 |
+| k=25 (2 rodadas) | 4, 4 | 19, 21 | 2, 0 |
+
+Conclusões:
+
+- **Resultado**: a transação serializa as escritas, mas NÃO o trecho
+  ler→checar→gravar — escritores simultâneos observam a linha velha e passam
+  juntos pela checagem. O escape escala com a concorrência (~2 em 10,
+  ~4 em 25) e rajadas altas PODEM produzir 500 por timeout de lock (observado
+  em 1 de 2 rodadas com k=25).
+- Consequência para a guarda de idade mínima: ela é **contenção parcial**,
+  não teto. Reduz a rajada a uma fração (medido ÷5); a projeção de cota usa o
+  pior caso medido.
+- Delta = 1 só com compare-and-swap real (índice único ou update condicional),
+  que o runtime v0.0.29 não expõe. Se a pressão de cota um dia aparecer, CAS
+  é a escalada — meio-termo não existe.
+
+### Probe rodada 2 — releitura de confirmação e jitter (24/08)
+
+Hipótese testada: reler a linha imediatamente antes do `update` fecharia a
+janela de corrida (os 8 recusados das rajadas originais viram a linha nova,
+sugerindo visibilidade de commits recentes dentro da transação).
+
+Variantes medidas contra a mesma capsule (semeadura + espera + K POSTs
+paralelos):
+
+| Variante | k=10 | k=25 |
+|---|---|---|
+| guarda simples (referência) | sempre 2 escritas | 4 escritas |
+| + espera 400 ms simulando login + releitura antes do update | 1–2 escritas (maioria 2) | 3–4 (+500 em 1 rodada) |
+| + jitter aleatório de até 150 ms na espera | sempre 2 escritas | — |
+
+Conclusões da rodada 2:
+
+- A releitura NÃO elimina o escape: o par simultâneo roda em **paralelo
+  verdadeiro** — nenhum dos dois vê o commit do outro, não importa onde a
+  releitura esteja. Os recusados enxergam a linha nova porque entram
+  depois, não porque leem por cima do irmão.
+- Jitter anti-alinhamento também não moveu o número: o par escapa junto
+  porque executa junto, não porque chegou junto.
+- Em produção a janela crítica é ainda menor: o caminho lento (login SPTrans)
+  acontece ANTES de `gravar`, cuja primeira leitura já nasce fresca — dois
+  requests só escapam se os logins terminarem alinhados em milissegundos.
+- Veredicto: contenção parcial da guarda é o máximo alcançável sem CAS;
+  nem releitura nem jitter justificam entrada no código.
+
 ## Restrições da capsule (v0.0.29)
 
 - O store de fontes lê o diretório com `readdir({withFileTypes:true})` e pula
