@@ -43,9 +43,11 @@ o código não conta. Válido enquanto a versão não mudar.
 - Em dev local o DB é efêmero por boot (cada `lakebed dev` começa sem
   sessão; reuso entre requests é só pela memória do processo). A reutilização
   de sessão via DB entre requests só existe no hospedado.
-- A geometria do trajeto GeoSampa tem timeout server-side de 5 s e cache em
-  memória por isolate por 5 min (até 64 linhas). O cache não vai para o DB,
-  desaparece no restart e não é requisito de correção.
+- A geometria do trajeto GeoSampa tem cache em memória por isolate por 5 min
+  (até 64 linhas). Sem tempo limite no fetch upstream — o runtime hospedado não
+  expõe timers ao código da capsule (`setTimeout` é barrado no deploy), mesmo
+  padrão do cliente Olho Vivo. O cache não vai para o DB, desaparece no restart
+  e não é requisito de correção.
 
 ## Restrições da capsule (v0.0.29)
 
