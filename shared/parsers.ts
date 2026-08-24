@@ -2,6 +2,8 @@ import type {
   Linha,
   PosicaoVeiculo,
   PosicoesDaLinha,
+  PontoRota,
+  RotaDaLinha,
   StatusApi,
 } from "./tipos.ts";
 
@@ -16,6 +18,17 @@ function ehTexto(valor: unknown): valor is string {
 
 function ehNumero(valor: unknown): valor is number {
   return typeof valor === "number" && Number.isFinite(valor);
+}
+
+function ehPontoRota(valor: unknown): valor is PontoRota {
+  return (
+    typeof valor === "object" &&
+    valor !== null &&
+    "lat" in valor &&
+    ehNumero(valor.lat) &&
+    "lng" in valor &&
+    ehNumero(valor.lng)
+  );
 }
 
 export function ehStatus(valor: unknown): valor is StatusApi {
@@ -88,6 +101,48 @@ export function paraPosicoes(bruto: unknown): PosicoesDaLinha | null {
   return { horario: ehTexto(horarioBruto) ? horarioBruto : "", veiculos };
 }
 
+function pontosGeoJson(bruto: unknown): PontoRota[] {
+  if (!Array.isArray(bruto)) return [];
+  const pontos: PontoRota[] = [];
+  for (const coordenada of bruto) {
+    if (!Array.isArray(coordenada)) continue;
+    const lng = coordenada[0];
+    const lat = coordenada[1];
+    if (!ehNumero(lat) || !ehNumero(lng)) continue;
+    pontos.push({ lat, lng });
+  }
+  return pontos;
+}
+
+function trechosGeoJson(bruto: unknown): PontoRota[][] {
+  if (typeof bruto !== "object" || bruto === null) return [];
+  const tipo = campoDe(bruto, "type");
+  const coordenadas = campoDe(bruto, "coordinates");
+  if (tipo === "LineString") {
+    const pontos = pontosGeoJson(coordenadas);
+    return pontos.length >= 2 ? [pontos] : [];
+  }
+  if (tipo !== "MultiLineString" || !Array.isArray(coordenadas)) return [];
+  const trechos: PontoRota[][] = [];
+  for (const coordenadasTrecho of coordenadas) {
+    const pontos = pontosGeoJson(coordenadasTrecho);
+    if (pontos.length >= 2) trechos.push(pontos);
+  }
+  return trechos;
+}
+
+export function paraRotaGeoSampa(bruto: unknown): RotaDaLinha | null {
+  if (typeof bruto !== "object" || bruto === null) return null;
+  const features = campoDe(bruto, "features");
+  if (!Array.isArray(features)) return null;
+  const trechos: PontoRota[][] = [];
+  for (const feature of features) {
+    if (typeof feature !== "object" || feature === null) continue;
+    trechos.push(...trechosGeoJson(campoDe(feature, "geometry")));
+  }
+  return trechos.length === 0 ? null : { trechos };
+}
+
 export function paraPosicoesDoCliente(bruto: unknown): PosicoesDaLinha | null {
   if (typeof bruto !== "object" || bruto === null) return null;
   if (!("horario" in bruto) || typeof bruto.horario !== "string") return null;
@@ -116,4 +171,16 @@ export function paraPosicoesDoCliente(bruto: unknown): PosicoesDaLinha | null {
     });
   }
   return { horario: bruto.horario, veiculos };
+}
+
+export function paraRotaDoCliente(bruto: unknown): RotaDaLinha | null {
+  if (typeof bruto !== "object" || bruto === null) return null;
+  if (!("trechos" in bruto) || !Array.isArray(bruto.trechos)) return null;
+  const trechos: PontoRota[][] = [];
+  for (const trecho of bruto.trechos) {
+    if (!Array.isArray(trecho)) continue;
+    const pontos = trecho.filter(ehPontoRota);
+    if (pontos.length >= 2) trechos.push(pontos);
+  }
+  return { trechos };
 }

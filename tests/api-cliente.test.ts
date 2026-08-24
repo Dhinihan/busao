@@ -56,3 +56,38 @@ test("posições rejeita payload sem a chave veiculos", async () => {
     return true;
   });
 });
+
+test("rota aceita o contrato do servidor", async () => {
+  corpo = {
+    trechos: [
+      [
+        { lat: -23.611, lng: -46.7532 },
+        { lat: -23.612, lng: -46.7542 },
+      ],
+      [
+        { lat: -23.613, lng: -46.7552 },
+        { lat: -23.614, lng: -46.7562 },
+      ],
+    ],
+  };
+  const rota = await api.rota(2508, "8700-10");
+  assert.deepEqual(rota.trechos, [
+    [
+      { lat: -23.611, lng: -46.7532 },
+      { lat: -23.612, lng: -46.7542 },
+    ],
+    [
+      { lat: -23.613, lng: -46.7552 },
+      { lat: -23.614, lng: -46.7562 },
+    ],
+  ]);
+});
+
+test("rota rejeita payload sem a chave trechos", async () => {
+  corpo = { pontos: [] };
+  await assert.rejects(api.rota(2508, "8700-10"), (erro: unknown) => {
+    assert.ok(erro instanceof ErroApi);
+    assert.equal(erro.message, "resposta de trajeto inválida");
+    return true;
+  });
+});

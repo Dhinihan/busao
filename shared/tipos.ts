@@ -11,6 +11,15 @@ export type PosicaoVeiculo = {
   readonly acessivel: boolean;
 };
 
+export type PontoRota = {
+  readonly lat: number;
+  readonly lng: number;
+};
+
+export type RotaDaLinha = {
+  readonly trechos: readonly (readonly PontoRota[])[];
+};
+
 export type PosicoesDaLinha = {
   readonly horario: string;
   readonly veiculos: readonly PosicaoVeiculo[];
