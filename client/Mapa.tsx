@@ -11,6 +11,7 @@ import {
   type Ponto,
 } from "../shared/tile-math";
 import { useLocalizacao, type EstadoPosicoes } from "./hooks";
+import { regiaoDoLetreiro } from "../shared/regioes.ts";
 import type { Linha } from "../shared/tipos.ts";
 
 const ZOOM_MINIMO = 0;
@@ -231,6 +232,7 @@ export function Mapa(props: {
       ))}
 
       {linhas.map((linha) => {
+        const regiao = regiaoDoLetreiro(linha.letreiro);
         const veiculos = posicoes[linha.id]?.dados?.veiculos ?? [];
         return veiculos.map((veiculo) => {
           const tela = pontoParaPixelDeTela(veiculo, {
@@ -256,7 +258,17 @@ export function Mapa(props: {
                   {linha.letreiro}
                 </span>
               )}
-              <div className="h-[14px] w-[14px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-neutral-900 bg-amber-400" />
+              <div
+                className={
+                  "h-[14px] w-[14px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-neutral-900" +
+                  (regiao === null ? " bg-amber-400" : "")
+                }
+                style={
+                  regiao === null
+                    ? undefined
+                    : { backgroundColor: regiao.cor }
+                }
+              />
               <div className="pointer-events-none absolute left-3 top-[-8px] hidden whitespace-nowrap rounded-md border border-[#dcdedb] bg-[#fbfbfa] px-1.5 py-0.5 font-mono text-xs text-[#191a1c] shadow-[0_2px_8px_rgba(23,24,26,0.15)] group-hover:block">
                 {linha.letreiro} · {veiculo.prefixo}
                 {veiculo.acessivel ? " · acessível" : ""}
