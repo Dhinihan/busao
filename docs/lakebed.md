@@ -50,13 +50,15 @@ o código não conta. Válido enquanto a versão não mudar.
   e não é requisito de correção.
 - Em 24/08 a cota de mutations estourou de novo (1.007/1.000), um dia depois da
   correção da persistência de sessão. Causa: o cliente pollava todas as linhas
-  em paralelo; quando o cookie de ~30 min morria, a rajada inteira relogava e
-  cada request gravava a sessão nova (e logins concorrentes derrubam a sessão
-  de novo — espiral). Correção: poll sequencial round-robin no cliente (≤ 1
-  request em voo por dispositivo), que tampa a escrita em ~1 por morte de
-  cookie. Lição: no hospedado, o multiplicador de mutations é a concorrência
-  de requests, não a frequência — qualquer caminho que escreva no DB precisa
-  ser à prova de rajada.
+  em paralelo; quando o cookie de ~30 min morria, todos os requests da rajada
+  liam o mesmo cookie morto e cada um relogava e gravava a própria sessão —
+  N requests simultâneos viram N escritas (o DB fica com a última sessão; as
+  outras cookies morrem sem uso, mas as escritas já contaram — logins
+  concorrentes coexistem, um não invalida o outro). Correção: poll sequencial
+  round-robin no cliente (≤ 1 request em voo por dispositivo), que tampa a
+  escrita em ~1 por morte de cookie. Lição: no hospedado, o multiplicador de
+  mutations é a concorrência de requests, não a frequência — qualquer caminho
+  que escreva no DB precisa ser à prova de rajada.
 
 ## Restrições da capsule (v0.0.29)
 

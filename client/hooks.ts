@@ -92,6 +92,7 @@ export function usePosicoesVarias(
     let timer: number | undefined;
     let controleAtual: AbortController | null = null;
     let despertar: (() => void) | null = null;
+    let interromper: (() => void) | null = null;
 
     const aguardarVisibilidade = (): Promise<void> =>
       new Promise((resolver) => {
@@ -101,9 +102,16 @@ export function usePosicoesVarias(
         };
       });
 
+    // Espera interrompível: voltar à aba antecipa a próxima rodada em vez
+    // de esperar o restante do intervalo.
     const esperar = (ms: number): Promise<void> =>
       new Promise((resolver) => {
         timer = window.setTimeout(resolver, ms);
+        interromper = () => {
+          window.clearTimeout(timer);
+          interromper = null;
+          resolver();
+        };
       });
 
     const consultar = async (id: number): Promise<void> => {
@@ -163,7 +171,10 @@ export function usePosicoesVarias(
     };
 
     const aoMudarVisibilidade = (): void => {
-      if (!document.hidden) despertar?.();
+      if (!document.hidden) {
+        despertar?.();
+        interromper?.();
+      }
     };
 
     document.addEventListener("visibilitychange", aoMudarVisibilidade);
@@ -174,6 +185,7 @@ export function usePosicoesVarias(
       window.clearTimeout(timer);
       controleAtual?.abort();
       despertar?.();
+      interromper?.();
       document.removeEventListener("visibilitychange", aoMudarVisibilidade);
     };
   }, [chave]);
