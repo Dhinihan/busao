@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import { api, ErroApi } from "./api";
 import { Estrela } from "./Estrela";
 import { Mapa } from "./Mapa";
-import { useFavoritas, usePosicoes, useValorPostergado } from "./hooks";
+import { useFavoritas, usePosicoesVarias, useValorPostergado } from "./hooks";
 import type { Linha, StatusApi } from "../shared/tipos.ts";
 
 const rotulo =
@@ -31,11 +31,23 @@ export function App() {
   const [resultados, setResultados] = useState<readonly Linha[] | null>(null);
   const [buscando, setBuscando] = useState(false);
   const [erroBusca, setErroBusca] = useState<string | null>(null);
-  const [linhaAtiva, setLinhaAtiva] = useState<Linha | null>(null);
+  const [rastreadas, setRastreadas] = useState<readonly Linha[]>([]);
 
-  const estadoPosicoes = usePosicoes(linhaAtiva?.id ?? null);
+  const posicoes = usePosicoesVarias(rastreadas.map((l) => l.id));
   const { favoritas, alternar, tem } = useFavoritas();
   const termoPostergado = useValorPostergado(termoBusca.trim(), 350);
+
+  function alternarRastreamento(linha: Linha): void {
+    setRastreadas((atuais) =>
+      atuais.some((l) => l.id === linha.id)
+        ? atuais.filter((l) => l.id !== linha.id)
+        : [...atuais, linha],
+    );
+  }
+
+  function estaRastreando(id: number): boolean {
+    return rastreadas.some((l) => l.id === id);
+  }
 
   const conectado = status?.configurado === true;
 
@@ -80,9 +92,10 @@ export function App() {
     };
   }, [conectado, termoPostergado]);
 
-  function selecionarLinha(linha: Linha): void {
-    setLinhaAtiva(linha);
-  }
+  const chips = [
+    ...favoritas,
+    ...rastreadas.filter((r) => !tem(r.id)),
+  ];
 
   return (
     <div className="flex min-h-dvh flex-col-reverse bg-[#eceeea] text-[#191a1c] md:grid md:h-dvh md:grid-cols-[minmax(320px,380px)_1fr]">
@@ -101,40 +114,93 @@ export function App() {
           </p>
         )}
 
-        {favoritas.length > 0 && (
-          <nav aria-label="Linhas favoritas">
+        {chips.length > 0 && (
+          <nav aria-label="Linhas favoritas e rastreadas">
             <span className={rotulo}>Favoritas</span>
             <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
-              {favoritas.map((f) => (
-                <li key={f.id} className="flex items-center gap-1">
+              {chips.map((c) => (
+                <li key={c.id} className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => selecionarLinha(f)}
+                    onClick={() => alternarRastreamento(c)}
+                    aria-pressed={estaRastreando(c.id)}
+                    aria-label={
+                      estaRastreando(c.id)
+                        ? `Parar de rastrear ${c.letreiro} no mapa`
+                        : `Rastrear ${c.letreiro} no mapa`
+                    }
                     className={
                       "-mx-1 my-0 flex flex-col items-start rounded-lg bg-gradient-to-b from-[#201e19] to-[#131211] px-3.5 py-1.5 cursor-pointer border-0 " +
-                      (linhaAtiva?.id === f.id
+                      (estaRastreando(c.id)
                         ? "shadow-[inset_0_0_14px_rgba(255,179,0,0.16),0_0_0_2px_#fbfbfa,0_0_0_4px_#ffb300]"
                         : "")
                     }
                   >
                     <span className="font-mono text-[13px] font-black uppercase tracking-[0.08em] text-[#ffb300]">
-                      {f.letreiro}
+                      {c.letreiro}
                     </span>
                     <span className="max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-tight text-[#c9c5ba]">
-                      {f.descricao}
+                      {c.descricao}
                     </span>
                   </button>
                   <button
                     type="button"
-                    className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border-0 bg-transparent text-[#9aa0a6] hover:bg-[#eceeea] hover:text-[#191a1c] text-[#a06d00]"
-                    aria-label={`Remover ${f.letreiro} das favoritas`}
-                    onClick={() => alternar(f)}
+                    className={
+                      "flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border-0 bg-transparent " +
+                      (tem(c.id)
+                        ? "text-[#a06d00] hover:bg-[#eceeea]"
+                        : "text-[#9aa0a6] hover:bg-[#eceeea] hover:text-[#191a1c]")
+                    }
+                    aria-pressed={tem(c.id)}
+                    aria-label={
+                      tem(c.id)
+                        ? `Remover ${c.letreiro} das favoritas`
+                        : `Salvar ${c.letreiro} nas favoritas`
+                    }
+                    onClick={() => alternar(c)}
                   >
-                    <Estrela cheia />
+                    <Estrela cheia={tem(c.id)} />
                   </button>
                 </li>
               ))}
             </ul>
+            {rastreadas.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                {rastreadas.map((l) => {
+                  const estadoLinha = posicoes[l.id];
+                  const dados = estadoLinha?.dados ?? null;
+                  return (
+                    <p
+                      key={l.id}
+                      className="m-0 flex items-center gap-1.5 text-xs"
+                    >
+                      <span className="font-mono font-black">{l.letreiro}</span>
+                      {estadoLinha?.erro !== null &&
+                      estadoLinha?.erro !== undefined ? (
+                        <span className="text-[#bf3b2b]">
+                          {estadoLinha.erro}
+                        </span>
+                      ) : dados === null ? (
+                        <span className="text-[#66696f]">
+                          buscando ônibus…
+                        </span>
+                      ) : (
+                        <>
+                          <span
+                            className={pontoVivo + " bg-[#0a6b3c]"}
+                            aria-hidden="true"
+                          />
+                          <span className="text-[#66696f]">
+                            ao vivo · {dados.horario} ·{" "}
+                            {dados.veiculos.length} ônibus
+                          </span>
+                        </>
+                      )}
+                    </p>
+                  );
+                })}
+              </div>
+            )}
           </nav>
         )}
 
@@ -152,65 +218,6 @@ export function App() {
             className="w-full rounded-[10px] border border-[#dcdedb] bg-white px-3.5 py-3 text-[15px] text-[#191a1c] outline-none placeholder:text-[#9aa0a6] focus:border-[#ffb300] focus:ring-2 focus:ring-[#ffb300]"
           />
         </div>
-
-        {linhaAtiva !== null && (
-          <section
-            aria-label="Linha selecionada"
-            className="rounded-xl border border-[#dcdedb] bg-white p-3.5"
-          >
-            <div className="flex items-center gap-2">
-              <Led classe="min-w-0 flex-1 overflow-hidden text-ellipsis text-2xl">
-                {linhaAtiva.letreiro}
-              </Led>
-              <button
-                type="button"
-                className={
-                  "flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border-0 bg-transparent " +
-                  (tem(linhaAtiva.id)
-                    ? "text-[#a06d00] hover:bg-[#eceeea]"
-                    : "text-[#9aa0a6] hover:bg-[#eceeea] hover:text-[#191a1c]")
-                }
-                aria-pressed={tem(linhaAtiva.id)}
-                aria-label={
-                  tem(linhaAtiva.id)
-                    ? `Remover ${linhaAtiva.letreiro} das favoritas`
-                    : `Salvar ${linhaAtiva.letreiro} nas favoritas`
-                }
-                onClick={() => alternar(linhaAtiva)}
-              >
-                <Estrela cheia={tem(linhaAtiva.id)} />
-              </button>
-              <button
-                type="button"
-                className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border-0 bg-transparent text-[22px] leading-none text-[#9aa0a6] hover:bg-[#eceeea] hover:text-[#191a1c]"
-                aria-label="Fechar linha ativa"
-                onClick={() => setLinhaAtiva(null)}
-              >
-                ×
-              </button>
-            </div>
-            <p className="mb-1 mt-3 text-sm">{linhaAtiva.descricao}</p>
-            <p className="m-0 flex items-center gap-1.5 text-xs text-[#66696f]">
-              {estadoPosicoes.erro !== null ? (
-                <span className="text-[#bf3b2b]">{estadoPosicoes.erro}</span>
-              ) : estadoPosicoes.dados === null ? (
-                "buscando ônibus…"
-              ) : (
-                <>
-                  <span
-                    className={pontoVivo + " bg-[#0a6b3c]"}
-                    aria-hidden="true"
-                  />
-                  ao vivo · {estadoPosicoes.dados.horario} ·{" "}
-                  {estadoPosicoes.dados.veiculos.length}{" "}
-                  {estadoPosicoes.dados.veiculos.length === 1
-                    ? "ônibus"
-                    : "ônibus"}
-                </>
-              )}
-            </p>
-          </section>
-        )}
 
         <section aria-live="polite">
           {resultados === null &&
@@ -253,10 +260,11 @@ export function App() {
                 <li key={l.id} className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => selecionarLinha(l)}
+                    onClick={() => alternarRastreamento(l)}
+                    aria-pressed={estaRastreando(l.id)}
                     className={
                       "block min-w-0 flex-1 rounded-[10px] border-0 px-[11px] py-[9px] text-left " +
-                      (linhaAtiva?.id === l.id
+                      (estaRastreando(l.id)
                         ? "cursor-pointer bg-[#fff7e0] shadow-[inset_0_0_0_2px_#ffb300]"
                         : "cursor-pointer bg-transparent hover:bg-[#eceeea]")
                     }
@@ -294,9 +302,9 @@ export function App() {
       </aside>
 
       <main className="relative flex h-[44dvh] shrink-0 md:h-dvh">
-        <Mapa linha={linhaAtiva} estado={estadoPosicoes} />
+        <Mapa linhas={rastreadas} posicoes={posicoes} />
 
-        {linhaAtiva === null && (
+        {rastreadas.length === 0 && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center">
             <div className="pointer-events-auto max-w-[320px] rounded-2xl bg-[#fbfbfa] px-[30px] py-7 text-center shadow-[0_10px_40px_rgba(23,24,26,0.18)]">
               <Led classe="text-2xl">busão·sp</Led>

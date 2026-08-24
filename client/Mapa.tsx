@@ -20,11 +20,11 @@ const pontoVivoMapa =
   "h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#0a6b3c] motion-reduce:animate-none";
 
 export function Mapa(props: {
-  linha: Linha | null;
-  estado: EstadoPosicoes;
+  linhas: readonly Linha[];
+  posicoes: Readonly<Record<number, EstadoPosicoes>>;
 }) {
-  const { linha, estado } = props;
-  const veiculos = estado.dados?.veiculos ?? [];
+  const { linhas, posicoes } = props;
+  const variasLinhas = linhas.length > 1;
 
   const [quadro, setQuadro] = useState<Ponto & { zoom: number }>({
     lat: -23.5505,
@@ -44,7 +44,7 @@ export function Mapa(props: {
     zoomInicial: number;
     ancora: Ponto;
   } | null>(null);
-  const enquadrouAte = useRef<number | null>(null);
+  const enquadrouAte = useRef<Set<number>>(new Set());
   const centralizouRef = useRef(false);
   const localizacao = useLocalizacao();
 
@@ -63,17 +63,28 @@ export function Mapa(props: {
   }, []);
 
   useEffect(() => {
-    if (linha === null || tamanho.largura === 0) return;
-    if (enquadrouAte.current === linha.id) return;
-    if (veiculos.length === 0) return;
-    enquadrouAte.current = linha.id;
-    setQuadro(
-      enquadrarPontos(veiculos, {
-        largura: tamanho.largura,
-        altura: tamanho.altura,
-      }),
-    );
-  }, [linha, tamanho.largura, tamanho.altura, veiculos]);
+    if (linhas.length === 0) {
+      enquadrouAte.current.clear();
+      return;
+    }
+    if (tamanho.largura === 0) return;
+    // Enquadra só a linha mais recente que chegou com ônibus; as demais
+    // continuam visíveis onde estiverem.
+    for (let i = linhas.length - 1; i >= 0; i--) {
+      const id = linhas[i]?.id;
+      if (id === undefined || enquadrouAte.current.has(id)) continue;
+      const veiculos = posicoes[id]?.dados?.veiculos;
+      if (veiculos === undefined || veiculos.length === 0) continue;
+      enquadrouAte.current.add(id);
+      setQuadro(
+        enquadrarPontos(veiculos, {
+          largura: tamanho.largura,
+          altura: tamanho.altura,
+        }),
+      );
+      break;
+    }
+  }, [linhas, posicoes, tamanho.largura, tamanho.altura]);
 
   useEffect(() => {
     if (!localizacao.ativa) centralizouRef.current = false;
@@ -219,29 +230,40 @@ export function Mapa(props: {
         />
       ))}
 
-      {veiculos.map((veiculo) => {
-        const tela = pontoParaPixelDeTela(veiculo, {
-          centro: quadro,
-          zoom: quadro.zoom,
-          largura: tamanho.largura,
-          altura: tamanho.altura,
-        });
-        return (
-          <div
-            key={veiculo.prefixo}
-            className="group absolute"
-            style={{ left: `${tela.x}px`, top: `${tela.y}px` }}
-          >
+      {linhas.map((linha) => {
+        const veiculos = posicoes[linha.id]?.dados?.veiculos ?? [];
+        return veiculos.map((veiculo) => {
+          const tela = pontoParaPixelDeTela(veiculo, {
+            centro: quadro,
+            zoom: quadro.zoom,
+            largura: tamanho.largura,
+            altura: tamanho.altura,
+          });
+          return (
             <div
-              className="h-[14px] w-[14px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-neutral-900 bg-amber-400"
-              title={veiculo.prefixo + (veiculo.acessivel ? " · acessível" : "")}
-            />
-            <div className="pointer-events-none absolute left-3 top-[-8px] hidden whitespace-nowrap rounded-md border border-[#dcdedb] bg-[#fbfbfa] px-1.5 py-0.5 font-mono text-xs text-[#191a1c] shadow-[0_2px_8px_rgba(23,24,26,0.15)] group-hover:block">
-              {veiculo.prefixo}
-              {veiculo.acessivel ? " · acessível" : ""}
+              key={`${linha.id}-${veiculo.prefixo}`}
+              className="group absolute"
+              style={{ left: `${tela.x}px`, top: `${tela.y}px` }}
+              title={
+                linha.letreiro +
+                " · " +
+                veiculo.prefixo +
+                (veiculo.acessivel ? " · acessível" : "")
+              }
+            >
+              {variasLinhas && (
+                <span className="pointer-events-none absolute bottom-[10px] left-0 -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-1 py-px font-mono text-[10px] font-bold leading-tight text-amber-300">
+                  {linha.letreiro}
+                </span>
+              )}
+              <div className="h-[14px] w-[14px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-neutral-900 bg-amber-400" />
+              <div className="pointer-events-none absolute left-3 top-[-8px] hidden whitespace-nowrap rounded-md border border-[#dcdedb] bg-[#fbfbfa] px-1.5 py-0.5 font-mono text-xs text-[#191a1c] shadow-[0_2px_8px_rgba(23,24,26,0.15)] group-hover:block">
+                {linha.letreiro} · {veiculo.prefixo}
+                {veiculo.acessivel ? " · acessível" : ""}
+              </div>
             </div>
-          </div>
-        );
+          );
+        });
       })}
 
       {localizacao.estado.ponto !== null &&

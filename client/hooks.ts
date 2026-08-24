@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useState } from "preact/hooks";
 import { api, ErroApi } from "./api";
 import { ehLinha } from "../shared/parsers.ts";
 import type { Linha, PosicoesDaLinha } from "../shared/tipos.ts";
@@ -76,30 +76,39 @@ const ESTADO_INICIAL: EstadoPosicoes = {
   atualizadoEm: null,
 };
 
-export function usePosicoes(idLinha: number | null): EstadoPosicoes {
-  const [estado, setEstado] = useState<EstadoPosicoes>(ESTADO_INICIAL);
-  const linhaRenderizada = useRef(idLinha);
-  const mudouLinha = linhaRenderizada.current !== idLinha;
-  linhaRenderizada.current = idLinha;
+export function usePosicoesVarias(
+  ids: readonly number[],
+): Readonly<Record<number, EstadoPosicoes>> {
+  const [porId, setPorId] = useState<
+    Readonly<Record<number, EstadoPosicoes>>
+  >({});
+  const chave = [...ids].sort((a, b) => a - b).join(",");
 
   useEffect(() => {
-    setEstado(ESTADO_INICIAL);
-    if (idLinha === null) return;
+    const alvos = chave === "" ? [] : chave.split(",").map(Number);
+    if (alvos.length === 0) return;
 
     let cancelado = false;
-    let emVoo = false;
-    let timer: number | undefined;
-    let controle: AbortController | null = null;
+    const emVoo = new Set<number>();
+    const controles = new Map<number, AbortController>();
+    const timers = new Map<number, number>();
 
-    const consultar = async (): Promise<void> => {
-      if (emVoo) return;
-      emVoo = true;
-      controle = new AbortController();
-      const tempoEsgotado = window.setTimeout(() => controle?.abort(), TIMEOUT_MS);
+    const consultar = async (id: number): Promise<void> => {
+      if (emVoo.has(id)) return;
+      emVoo.add(id);
+      const controle = new AbortController();
+      controles.set(id, controle);
+      const tempoEsgotado = window.setTimeout(
+        () => controle.abort(),
+        TIMEOUT_MS,
+      );
       try {
-        const dados = await api.posicoes(idLinha, { sinal: controle.signal });
+        const dados = await api.posicoes(id, { sinal: controle.signal });
         if (!cancelado) {
-          setEstado({ dados, erro: null, atualizadoEm: new Date() });
+          setPorId((atual) => ({
+            ...atual,
+            [id]: { dados, erro: null, atualizadoEm: new Date() },
+          }));
         }
       } catch (erro) {
         if (!cancelado) {
@@ -107,35 +116,50 @@ export function usePosicoes(idLinha: number | null): EstadoPosicoes {
             erro instanceof ErroApi
               ? erro.message
               : "não foi possível atualizar as posições";
-          setEstado((atual) => ({ ...atual, erro: mensagem }));
+          setPorId((atual) => ({
+            ...atual,
+            [id]: {
+              ...(atual[id] ?? ESTADO_INICIAL),
+              erro: mensagem,
+            },
+          }));
         }
       } finally {
         window.clearTimeout(tempoEsgotado);
-        emVoo = false;
+        emVoo.delete(id);
         if (!cancelado && !document.hidden) {
-          timer = window.setTimeout(() => void consultar(), INTERVALO_MS);
+          timers.set(
+            id,
+            window.setTimeout(() => void consultar(id), INTERVALO_MS),
+          );
         }
       }
     };
 
     const aoMudarVisibilidade = (): void => {
-      window.clearTimeout(timer);
-      if (!document.hidden) void consultar();
+      for (const timer of timers.values()) window.clearTimeout(timer);
+      timers.clear();
+      if (!document.hidden) for (const id of alvos) void consultar(id);
     };
 
     document.addEventListener("visibilitychange", aoMudarVisibilidade);
-    void consultar();
+    for (const id of alvos) void consultar(id);
 
     return () => {
       cancelado = true;
-      window.clearTimeout(timer);
-      controle?.abort();
+      for (const timer of timers.values()) window.clearTimeout(timer);
+      for (const controle of controles.values()) controle.abort();
       document.removeEventListener("visibilitychange", aoMudarVisibilidade);
     };
-  }, [idLinha]);
+  }, [chave]);
 
-  // A nova linha precisa renderizar sem os dados da anterior antes dos efeitos rodarem.
-  return mudouLinha ? ESTADO_INICIAL : estado;
+  // Entradas de linhas que saíram do mapa não vazam para a renderização.
+  const vivas: Record<number, EstadoPosicoes> = {};
+  for (const id of ids) {
+    const estado = porId[id];
+    if (estado !== undefined) vivas[id] = estado;
+  }
+  return vivas;
 }
 
 export type EstadoLocalizacao = {
