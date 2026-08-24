@@ -47,15 +47,28 @@ async function lerSessaoDb(): Promise<Sessao | null> {
   }
 }
 
-async function gravarSessaoDb(sessao: Sessao): Promise<void> {
+async function gravarSessaoDb(sessao: Sessao): Promise<Sessao | null> {
   try {
-    const resultado = await estadoDb.gravar("sessao", JSON.stringify(sessao));
-    if (resultado === "criada" || resultado === "atualizada") {
-      logAtual.info("estado: sessao gravada", { resultado });
+    const escrito = await estadoDb.gravar("sessao", JSON.stringify(sessao));
+    if (escrito.resultado === "criada" || escrito.resultado === "atualizada") {
+      logAtual.info("estado: sessao gravada", { resultado: escrito.resultado });
+      return null;
     }
+    if (escrito.vigente === null) return null;
+    const adotavel = interpretarSessao(escrito.vigente);
+    if (
+      escrito.resultado === "ignorada" &&
+      adotavel !== null &&
+      adotavel.token === sessao.token
+    ) {
+      logAtual.info("estado: sessao adotada");
+      return adotavel;
+    }
+    return null;
   } catch (erro) {
     const nome = erro instanceof Error ? erro.name : typeof erro;
     logAtual.info("estado: escrita ignorada", { chave: "sessao", tipo: nome });
+    return null;
   }
 }
 

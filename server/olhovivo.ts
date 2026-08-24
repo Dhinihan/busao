@@ -68,7 +68,7 @@ type ClienteOlhoVivoOpcoes = {
   readonly buscar?: typeof fetch;
   readonly aoAutenticar?: (token: string) => void;
   readonly lerSessao?: () => Promise<unknown>;
-  readonly gravarSessao?: (sessao: Sessao) => Promise<void>;
+  readonly gravarSessao?: (sessao: Sessao) => Promise<Sessao | null>;
 };
 
 export function criarClienteOlhoVivo(opcoes: ClienteOlhoVivoOpcoes): ClienteOlhoVivo {
@@ -87,9 +87,11 @@ export function criarClienteOlhoVivo(opcoes: ClienteOlhoVivoOpcoes): ClienteOlho
       : null;
   }
 
-  async function guardarSessao(sessao: Sessao): Promise<void> {
-    sessaoMemoria = sessao;
-    await opcoes.gravarSessao?.(sessao);
+  async function guardarSessao(sessao: Sessao): Promise<Sessao> {
+    const adotada = await opcoes.gravarSessao?.(sessao);
+    const vigente = adotada ?? sessao;
+    sessaoMemoria = vigente;
+    return vigente;
   }
 
   function descartarSessaoAtual(): void {
@@ -132,7 +134,10 @@ export function criarClienteOlhoVivo(opcoes: ClienteOlhoVivoOpcoes): ClienteOlho
         atual = existente;
       } else {
         atual = await entrar(token);
-        await guardarSessao(atual);
+        const vigente = await guardarSessao(atual);
+        if (!cookiesRejeitados.has(vigente.cookie)) {
+          atual = vigente;
+        }
       }
       let resposta: Response;
       try {

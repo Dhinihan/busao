@@ -155,7 +155,9 @@ test("hooks de sessão externalizam o cookie e evitam re-login", async () => {
     },
     gravarSessao: async (sessao) => {
       loja.atual = JSON.stringify(sessao);
+      return null;
     },
+
   });
 
   fila.push(loginOk(), dados200(), dados200());
@@ -186,6 +188,7 @@ test("cookie expirado ignora o valor persistido e grava a nova sessão", async (
     lerSessao: async () => persistido,
     gravarSessao: async (sessao) => {
       persistido = JSON.stringify(sessao);
+      return null;
     },
     buscar: async (entrada, init) => {
       const url = new URL(String(entrada));
@@ -225,6 +228,7 @@ test("sessão externa de outro token é descartada e refaz login", async () => {
     lerSessao: async () => loja.atual,
     gravarSessao: async (sessao) => {
       loja.atual = sessao;
+      return null;
     },
   });
 
@@ -236,4 +240,83 @@ test("sessão externa de outro token é descartada e refaz login", async () => {
     { metodo: "POST", caminho: "/v2.1/Login/Autenticar?token=token-de-teste" },
     { metodo: "GET", caminho: "/v2.1/Linha/Buscar?termosBusca=Campo" },
   ]);
+});
+
+test("escrita recusada devolve canônico vivo e o request o adota", async () => {
+  const canonico: Sessao = {
+    token: TOKEN_FIXO,
+    cookie: "apiCredentials=canonico",
+  };
+  const local: Sessao = { token: TOKEN_FIXO, cookie: "apiCredentials=local" };
+  const cookiesEnviados: string[] = [];
+  let logins = 0;
+
+  const clienteExterno = criarClienteOlhoVivo({
+    obterToken: async () => TOKEN_FIXO,
+    lerSessao: async () => null,
+    gravarSessao: async () => canonico,
+    buscar: async (entrada, init) => {
+      if ((init?.method ?? "GET") === "POST") {
+        logins += 1;
+        return respostaFake({
+          status: 200,
+          corpo: "true",
+          comCookie: true,
+          cookie: local.cookie,
+        });
+      }
+      const cookie = new Headers(init?.headers).get("cookie");
+      if (cookie !== null) cookiesEnviados.push(cookie);
+      if (cookie === canonico.cookie) return dados200();
+      throw new Error(
+        `cookie inesperado para ${new URL(String(entrada)).pathname}`,
+      );
+    },
+  });
+
+  assert.equal((await clienteExterno.buscarLinhas("Campo")).length, 1);
+  assert.equal(logins, 1);
+  assert.deepEqual(cookiesEnviados, [canonico.cookie]);
+});
+
+test("canônico já rejeitado não é readotado — o cookie próprio fresco segue", async () => {
+  const morto = "apiCredentials=morto";
+  const fresco = "apiCredentials=fresco";
+  let persistido: string | null = JSON.stringify({
+    token: TOKEN_FIXO,
+    cookie: morto,
+  });
+  const cookiesEnviados: string[] = [];
+  let logins = 0;
+
+  const clienteExterno = criarClienteOlhoVivo({
+    obterToken: async () => TOKEN_FIXO,
+    lerSessao: async () => persistido,
+    gravarSessao: async (sessao) => {
+      persistido = JSON.stringify(sessao);
+      return { token: TOKEN_FIXO, cookie: morto };
+    },
+    buscar: async (entrada, init) => {
+      if ((init?.method ?? "GET") === "POST") {
+        logins += 1;
+        return respostaFake({
+          status: 200,
+          corpo: "true",
+          comCookie: true,
+          cookie: fresco,
+        });
+      }
+      const cookie = new Headers(init?.headers).get("cookie");
+      if (cookie !== null) cookiesEnviados.push(cookie);
+      if (cookie === morto) return dados401();
+      if (cookie === fresco) return dados200();
+      throw new Error(
+        `cookie inesperado para ${new URL(String(entrada)).pathname}`,
+      );
+    },
+  });
+
+  assert.equal((await clienteExterno.buscarLinhas("Campo")).length, 1);
+  assert.equal(logins, 1);
+  assert.deepEqual(cookiesEnviados, [morto, fresco]);
 });
