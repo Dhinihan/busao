@@ -4,6 +4,8 @@ Site minimalista para acompanhar em tempo real onde estão os ônibus das linhas
 
 - Busca de linhas por **número** (`8000`, `N106`) ou **nome** (`Paulista`)
 - Posições dos ônibus em **mapa ao vivo** (atualização a cada 10 s)
+- Círculo do ônibus na **cor da área operacional** de origem da linha (primeiro
+  dígito do letreiro; nas noturnas, o dígito após o `N`)
 - **Favoritas** salvas no navegador (localStorage)
 - Rastreamento da posição do usuário (`watchPosition`, persistido)
 
