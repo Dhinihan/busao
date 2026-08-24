@@ -108,17 +108,18 @@ export function expandirJanela(janela: JanelaDeFrequencia): readonly string[] {
   }
   const passo = janela.intervaloSegundos / 60;
   const partidas: string[] = [];
-  for (let minuto = inicio; minuto <= fim && partidas.length < LIMITE_PARTIDAS_POR_JANELA; minuto += passo) {
+  for (let minuto = inicio; minuto < fim && partidas.length < LIMITE_PARTIDAS_POR_JANELA; minuto += passo) {
     partidas.push(paraHHMM(Math.round(minuto)));
   }
   return partidas;
 }
 
-// Convenção adotada: "util" exige seg–sex inteiros no serviço.
+// Convenção adotada: "util" exige os cinco dias úteis ativos no serviço.
 export function tiposDiaDoServico(servico: Registro): readonly TipoDia[] {
   const tipos: TipoDia[] = [];
   const diaAtivo = (coluna: string): boolean => servico[coluna] === "1";
-  if (diaAtivo("monday") && diaAtivo("friday")) tipos.push("util");
+  const uteis = ["monday", "tuesday", "wednesday", "thursday", "friday"];
+  if (uteis.every((coluna) => diaAtivo(coluna))) tipos.push("util");
   if (diaAtivo("saturday")) tipos.push("sab");
   if (diaAtivo("sunday")) tipos.push("dom");
   return tipos;

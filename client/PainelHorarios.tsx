@@ -28,6 +28,12 @@ export function PainelHorarios(props: {
 }) {
   const { linha, aoFechar } = props;
   const [estado, setEstado] = useState<EstadoPainel>(SEM_QUADRO);
+  const [agora, setAgora] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setAgora(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let cancelado = false;
@@ -59,7 +65,6 @@ export function PainelHorarios(props: {
     return () => window.removeEventListener("keydown", aoTeclar);
   }, [aoFechar]);
 
-  const agora = new Date();
   const tipo = tipoDiaDe(agora);
   const agoraMin = agora.getHours() * 60 + agora.getMinutes();
   const partidas = estado.quadro

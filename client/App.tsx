@@ -180,6 +180,7 @@ export function App() {
                     onPointerDown={(e) => iniciarPressao(c, e)}
                     onPointerUp={cancelarPressao}
                     onPointerLeave={cancelarPressao}
+                    onPointerCancel={cancelarPressao}
                     onPointerMove={(e) => moverPressao(e)}
                     onContextMenu={(e) => e.preventDefault()}
                     onClick={() => {

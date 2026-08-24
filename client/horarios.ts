@@ -47,7 +47,7 @@ export function minutosDaPartida(partida: string): number | null {
   const horas = Number(partes[0]);
   const minutos = Number(partes[1]);
   if (
-    partes.length < 2 ||
+    partes.length !== 2 ||
     !Number.isInteger(horas) ||
     !Number.isInteger(minutos) ||
     horas < 0 ||

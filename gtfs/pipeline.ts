@@ -142,6 +142,8 @@ function emitirSql(
   rotas: readonly RotaExtraida[],
   mapa: MapaCl,
 ): string {
+  const literalSql = (valor: string): string =>
+    `'${valor.replaceAll("'", "''")}'`;
   const partes: string[] = ["DELETE FROM horarios;"];
   let inseridos = 0;
   const semMapeamento: string[] = [];
@@ -161,7 +163,7 @@ function emitirSql(
       const valores = Object.entries(sentido.partidas)
         .filter(([, lista]) => lista.length > 0)
         .map(([tipo, lista]) =>
-          `('${entrada.cl}','${tipo}',${JSON.stringify(sentido.origem)},'${JSON.stringify(lista)}','${mapa.feed_em}')`)
+          `(${entrada.cl},${literalSql(tipo)},${literalSql(sentido.origem)},${literalSql(JSON.stringify(lista))},${literalSql(mapa.feed_em)})`)
         .join(",");
       if (valores === "") continue;
       partes.push(

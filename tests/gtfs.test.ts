@@ -32,6 +32,13 @@ test("expandirJanela com passo que não fecha a hora para no limite", () => {
   );
 });
 
+test("expandirJanela trata end_time como limite exclusivo (spec GTFS)", () => {
+  assert.deepEqual(
+    expandirJanela({ inicio: "06:00", fim: "06:30", intervaloSegundos: 1800 }),
+    ["06:00"],
+  );
+});
+
 test("expandirJanela rejeita janelas vazias ou invertidas", () => {
   assert.deepEqual(
     expandirJanela({ inicio: "07:00", fim: "06:00", intervaloSegundos: 600 }),
@@ -54,6 +61,7 @@ test("tiposDiaDoServico mapeia os serviços do calendar da SPTrans", () => {
   assert.deepEqual(tiposDiaDoServico(linha("0000001")), ["dom"]);
   assert.deepEqual(tiposDiaDoServico(linha("1111111")), ["util", "sab", "dom"]);
   assert.deepEqual(tiposDiaDoServico(linha("1000000")), []);
+  assert.deepEqual(tiposDiaDoServico(linha("1000100")), []);
 });
 
 function fixture() {
@@ -94,9 +102,9 @@ test("extrairRotas une janelas por tipo de dia e usa stop_times quando falta fre
   const ida = rota.sentidos[0];
   assert.ok(ida);
   assert.equal(ida.origem, "Terminal Lapa - Plat. 1");
-  // US_ cobre dia útil e sábado; _S_ só sábado.
-  assert.deepEqual(ida.partidas.util, ["06:00", "06:15", "06:30", "07:00", "07:20"]);
-  assert.deepEqual(ida.partidas.sab, ["06:00", "06:15", "06:30", "07:00", "07:20"]);
+  // US_ cobre dia útil e sábado; _S_ só sábado. end_time é exclusivo.
+  assert.deepEqual(ida.partidas.util, ["06:00", "06:15", "07:00"]);
+  assert.deepEqual(ida.partidas.sab, ["06:00", "06:15", "07:00"]);
   assert.deepEqual(ida.partidas.dom, []);
 
   const volta = rota.sentidos[1];
