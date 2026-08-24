@@ -252,7 +252,7 @@ export function Mapa(props: {
               }
             >
               {variasLinhas && (
-                <span className="pointer-events-none absolute bottom-[10px] left-0 -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-1 py-px font-mono text-[10px] font-bold leading-tight text-amber-300">
+                <span className="pointer-events-none absolute bottom-[23px] left-0 -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-1 py-px font-mono text-[10px] font-bold leading-tight text-amber-300">
                   {linha.letreiro}
                 </span>
               )}
