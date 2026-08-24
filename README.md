@@ -5,6 +5,8 @@ Site minimalista para acompanhar em tempo real onde estão os ônibus das linhas
 - Busca de linhas por **número** (`8000`, `N106`) ou **nome** (`Paulista`)
 - Posições dos ônibus em **mapa ao vivo** (atualização a cada 10 s)
 - Trajeto completo da linha desenhado pela geometria oficial do GeoSampa
+- Círculo do ônibus na **cor da área operacional** de origem da linha (primeiro
+  dígito do letreiro; nas noturnas, o dígito após o `N`)
 - **Favoritas** salvas no navegador (localStorage)
 - Rastreamento da posição do usuário (`watchPosition`, persistido)
 
@@ -42,6 +44,18 @@ enquanto isso as buscas retornam a mensagem “a SPTrans ainda não ativou essa
 chave”. O servidor faz login automaticamente e reutiliza a sessão (cookie)
 persistida no banco da capsule; posições repetidas dentro de 7 s são servidas de
 cache em memória.
+
+### Worktrees (`git worktree`)
+
+O arquivo fica fora do Git, então worktrees novos nascem sem token. Rode
+
+```sh
+./busao-env
+```
+
+para copiar o `.env.lakebed.server` do checkout principal antes de subir o
+servidor (symlink não serve: o lakebed ignora arquivos que não são regulares —
+ver `docs/lakebed.md`).
 
 ## Deploy
 
