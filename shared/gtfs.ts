@@ -239,3 +239,19 @@ export function prefixoLetreiro(routeId: string): string {
   const corte = routeId.lastIndexOf("-");
   return corte > 0 ? routeId.slice(0, corte) : routeId;
 }
+
+// Cor oficial da linha (route_color de routes.txt) por letreiro sem sufixo.
+// A primeira variante do feed vence e cor ausente/malformada é descartada.
+export function extrairCores(
+  rotas: readonly Registro[],
+): Readonly<Record<string, string>> {
+  const cores: Record<string, string> = {};
+  for (const rota of rotas) {
+    const cor = rota.route_color ?? "";
+    if (!/^[0-9A-Fa-f]{6}$/.test(cor)) continue;
+    const letreiro = prefixoLetreiro(rota.route_id ?? "");
+    if (letreiro === "" || cores[letreiro] !== undefined) continue;
+    cores[letreiro] = `#${cor}`;
+  }
+  return cores;
+}

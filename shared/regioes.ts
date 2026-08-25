@@ -1,3 +1,6 @@
+import { CORES_POR_LETREIRO } from "./cores.ts";
+import { prefixoLetreiro } from "./gtfs.ts";
+
 export type Regiao = {
   readonly nome: string;
   readonly cor: string;
@@ -23,4 +26,13 @@ export function regiaoDoLetreiro(letreiro: string): Regiao | null {
   const digito = letreiro.charAt(0) === "N" ? letreiro.charAt(1) : letreiro.charAt(0);
   const area = Number.parseInt(digito, 10);
   return AREAS[area] ?? null;
+}
+
+// A cor oficial vem do GTFS publicado pela SPTrans (routes.txt) — a mesma
+// fonte que mapas como o Google consomem. A paleta por área operacional fica
+// como fallback para linhas fora do feed.
+export function corDoLetreiro(letreiro: string): string | null {
+  const oficial = CORES_POR_LETREIRO[prefixoLetreiro(letreiro)];
+  if (oficial !== undefined) return oficial;
+  return regiaoDoLetreiro(letreiro)?.cor ?? null;
 }
