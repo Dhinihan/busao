@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   csvParaRegistros,
   expandirJanela,
+  extrairCores,
   extrairRotas,
   prefixoLetreiro,
   tiposDiaDoServico,
@@ -119,4 +120,28 @@ test("prefixoLetreiro separa sufixo do letreiro", () => {
   assert.equal(prefixoLetreiro("477A-10"), "477A");
   assert.equal(prefixoLetreiro("8000-10"), "8000");
   assert.equal(prefixoLetreiro("SEMTRACO"), "SEMTRACO");
+});
+
+test("extrairCores mapeia letreiro para route_color com #", () => {
+  const registros = csvParaRegistros(
+    'route_id,route_color\n"8000-10","FF671F"\n"8000-21","FF671F"\n"N106-11","0082BA"',
+  );
+  assert.deepEqual(extrairCores(registros), {
+    "8000": "#FF671F",
+    N106: "#0082BA",
+  });
+});
+
+test("extrairCores descarta cor ausente ou malformada", () => {
+  const registros = csvParaRegistros(
+    ['route_id,route_color', '"A-10",""', '"B-10","VERDE"', '"C-10","00BFFF"'].join("\n"),
+  );
+  assert.deepEqual(extrairCores(registros), { C: "#00BFFF" });
+});
+
+test("extrairCores: primeira variante vence quando variantes divergem", () => {
+  const registros = csvParaRegistros(
+    'route_id,route_color\n"3063-10","DA291C"\n"3063-11","FFD100"',
+  );
+  assert.deepEqual(extrairCores(registros), { "3063": "#DA291C" });
 });

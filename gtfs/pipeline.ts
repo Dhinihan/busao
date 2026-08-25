@@ -11,7 +11,12 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { csvParaRegistros, extrairRotas, prefixoLetreiro } from "../shared/gtfs.ts";
+import {
+  csvParaRegistros,
+  extrairCores,
+  extrairRotas,
+  prefixoLetreiro,
+} from "../shared/gtfs.ts";
 import type { RotaExtraida } from "../shared/gtfs.ts";
 
 const raiz = new URL("..", import.meta.url).pathname;
@@ -179,6 +184,20 @@ function emitirSql(
   return partes.join("\n");
 }
 
+function emitirCoresTs(cores: Readonly<Record<string, string>>): string {
+  const entradas = Object.entries(cores)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([letreiro, cor]) => `${JSON.stringify(letreiro)}:${JSON.stringify(cor)}`)
+    .join(",");
+  return [
+    "// GERADO por gtfs/pipeline.ts a partir de routes.txt do GTFS — não editar à mão.",
+    "export const CORES_POR_LETREIRO: Readonly<Record<string, string>> = {" +
+      entradas +
+      "};",
+    "",
+  ].join("\n");
+}
+
 const tmp = "/tmp/busao-gtfs-carga";
 rmSync(tmp, { recursive: true, force: true });
 mkdirSync(tmp, { recursive: true });
@@ -197,6 +216,10 @@ const fontes = {
 
 const rotas = extrairRotas(fontes);
 console.log(`Rotas extraídas do GTFS: ${rotas.length}`);
+
+const cores = extrairCores(fontes.rotas);
+writeFileSync(`${raiz}shared/cores.ts`, emitirCoresTs(cores));
+console.log(`Cores oficiais: ${Object.keys(cores).length} letreiros -> shared/cores.ts`);
 
 const letreirosNecessarios = [...new Set(rotas.map((r) => prefixoLetreiro(r.routeId)))];
 
