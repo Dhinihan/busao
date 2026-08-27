@@ -30,9 +30,15 @@ export const api = {
     return corpo;
   },
 
-  async buscarLinhas(termo: string): Promise<readonly Linha[]> {
+  async buscarLinhas(
+    termo: string,
+    opcoes: { readonly sinal?: AbortSignal } = {},
+  ): Promise<readonly Linha[]> {
+    const init =
+      opcoes.sinal !== undefined ? { signal: opcoes.sinal } : undefined;
     const dados = await obterCorpo(
       `/api/linhas?termo=${encodeURIComponent(termo)}`,
+      init,
     );
     if (!Array.isArray(dados)) {
       throw new ErroApi("resposta inesperada na busca de linhas");

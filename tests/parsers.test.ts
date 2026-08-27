@@ -10,7 +10,7 @@ import { mensagemDeErro } from "../shared/mensagens.ts";
 test("paraLinha mapeia um registro completo", () => {
   assert.deepEqual(
     paraLinha({ cl: 1234, lt: "8000", tl: 10, tp: "Term. A", ts: "Term. B" }),
-    { id: 1234, letreiro: "8000-10", descricao: "Term. A" },
+    { id: 1234, letreiro: "8000-10", descricao: "Term. A", sentido: undefined },
   );
 });
 
@@ -35,6 +35,15 @@ test("paraLinha troca o destino conforme o sentido", () => {
   assert.equal(volta?.descricao, "TERM. CAMPO LIMPO");
 });
 
+test("paraLinha extrai o sentido do campo sl", () => {
+  const ida = paraLinha({ cl: 1, lt: "8000", tl: 10, sl: 1, tp: "A", ts: "B" });
+  assert.equal(ida?.sentido, "ida");
+  const volta = paraLinha({ cl: 2, lt: "8000", tl: 10, sl: 2, tp: "A", ts: "B" });
+  assert.equal(volta?.sentido, "volta");
+  const semSentido = paraLinha({ cl: 3, lt: "8000", tl: 10 });
+  assert.equal(semSentido?.sentido, undefined);
+});
+
 test("paraLinha aceita tl numérico ou textual", () => {
   const numerico = paraLinha({ cl: 1, lt: "N106", tl: 11, tp: "", ts: "X" });
   assert.equal(numerico?.letreiro, "N106-11");
@@ -44,7 +53,12 @@ test("paraLinha aceita tl numérico ou textual", () => {
 
 test("paraLinha lida com terminais ausentes", () => {
   const linha = paraLinha({ cl: 3, lt: "8000", tl: 10 });
-  assert.deepEqual(linha, { id: 3, letreiro: "8000-10", descricao: "" });
+  assert.deepEqual(linha, {
+    id: 3,
+    letreiro: "8000-10",
+    descricao: "",
+    sentido: undefined,
+  });
 });
 
 test("paraLinha devolve nulo em registros inválidos", () => {

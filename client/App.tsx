@@ -1,8 +1,10 @@
+import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api, ErroApi } from "./api";
 import { Estrela } from "./Estrela";
 import { Mapa } from "./Mapa";
 import { PainelHorarios } from "./PainelHorarios";
+import { Casa, Predio } from "./Sentidos";
 import {
   useFavoritas,
   usePosicoesVarias,
@@ -30,6 +32,36 @@ function Led(props: { classe?: string; children: preact.ComponentChildren }) {
 
 const pontoVivo =
   "h-2 w-2 shrink-0 animate-pulse rounded-full motion-reduce:animate-none";
+
+type ChaveGrupo = "ida" | "volta" | "neutro";
+
+const CHAVES_GRUPO = ["neutro", "ida", "volta"] as const;
+
+const ROTULOS_GRUPO: Readonly<Record<ChaveGrupo, string>> = {
+  ida: "Ida",
+  volta: "Volta",
+  neutro: "Outras",
+};
+
+// Só favoritas ganham grupo direcional: rastreada não-favorita também tem
+// sentido (vem da busca), mas não é favorita — cai em "Outras" com as
+// legadas cujo sentido não foi recuperado.
+function separarPorSentido(
+  favoritas: readonly Linha[],
+  outras: readonly Linha[],
+): Readonly<Record<ChaveGrupo, readonly Linha[]>> {
+  const grupos: Record<ChaveGrupo, Linha[]> = {
+    ida: [],
+    volta: [],
+    neutro: [...outras],
+  };
+  for (const linha of favoritas) {
+    if (linha.sentido === "ida") grupos.ida.push(linha);
+    else if (linha.sentido === "volta") grupos.volta.push(linha);
+    else grupos.neutro.push(linha);
+  }
+  return grupos;
+}
 
 export function App() {
   const [status, setStatus] = useState<StatusApi | null>(null);
@@ -166,10 +198,13 @@ export function App() {
     };
   }, [conectado, termoPostergado]);
 
-  const chips = [
-    ...favoritas,
-    ...rastreadas.filter((r) => !tem(r.id)),
-  ];
+  const rastreadasAvulsas = rastreadas.filter((r) => !tem(r.id));
+  const chips = [...favoritas, ...rastreadasAvulsas];
+  const porSentido = separarPorSentido(favoritas, rastreadasAvulsas);
+  const gruposVisiveis = CHAVES_GRUPO.map((chave) => ({
+    chave,
+    linhas: porSentido[chave],
+  })).filter((g) => g.linhas.length > 0);
 
   return (
     <div className="flex min-h-dvh flex-col-reverse bg-[#eceeea] text-[#191a1c] md:grid md:h-dvh md:grid-cols-[minmax(320px,380px)_1fr]">
@@ -192,67 +227,78 @@ export function App() {
         )}
 
         {chips.length > 0 && (
-          <nav aria-label="Linhas favoritas e rastreadas">
-            <span className={rotulo}>Favoritas</span>
-            <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
-              {chips.map((c) => (
-                <li key={c.id} className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onPointerDown={(e) => iniciarPressao(c, e)}
-                    onPointerUp={cancelarPressao}
-                    onPointerLeave={cancelarPressao}
-                    onPointerCancel={cancelarPressao}
-                    onPointerMove={(e) => moverPressao(e)}
-                    onContextMenu={(e) => e.preventDefault()}
-                    onClick={() => {
-                      if (pressao.current.disparou) {
-                        pressao.current.disparou = false;
-                        return;
-                      }
-                      alternarRastreamento(c);
-                    }}
-                    aria-pressed={estaRastreando(c.id)}
-                    aria-label={
-                      estaRastreando(c.id)
-                        ? `Parar de rastrear ${c.letreiro} no mapa`
-                        : `Rastrear ${c.letreiro} no mapa`
-                    }
-                    className={
-                      "-mx-1 my-0 flex flex-col items-start rounded-lg bg-gradient-to-b from-[#201e19] to-[#131211] px-3.5 py-1.5 cursor-pointer border-0 select-none [-webkit-touch-callout:none] " +
-                      (estaRastreando(c.id)
-                        ? "shadow-[inset_0_0_14px_rgba(255,179,0,0.16),0_0_0_2px_#fbfbfa,0_0_0_4px_#ffb300]"
-                        : "")
-                    }
-                  >
-                    <span className="font-mono text-[13px] font-black uppercase tracking-[0.08em] text-[#ffb300]">
-                      {c.letreiro}
-                    </span>
-                    <span className="max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-tight text-[#c9c5ba]">
-                      {c.descricao}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className={
-                      "flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border-0 bg-transparent " +
-                      (tem(c.id)
-                        ? "text-[#a06d00] hover:bg-[#eceeea]"
-                        : "text-[#9aa0a6] hover:bg-[#eceeea] hover:text-[#191a1c]")
-                    }
-                    aria-pressed={tem(c.id)}
-                    aria-label={
-                      tem(c.id)
-                        ? `Remover ${c.letreiro} das favoritas`
-                        : `Salvar ${c.letreiro} nas favoritas`
-                    }
-                    onClick={() => alternar(c)}
-                  >
-                    <Estrela cheia={tem(c.id)} />
-                  </button>
-                </li>
-              ))}
-            </ul>
+          <nav
+            aria-label="Linhas favoritas e rastreadas"
+            className="[&>*+*]:mt-4"
+          >
+            {gruposVisiveis.map((g) => (
+              <Fragment key={g.chave}>
+                <span className={rotulo}>
+                  {g.chave === "ida" && <Predio />}
+                  {g.chave === "volta" && <Casa />}
+                  {ROTULOS_GRUPO[g.chave]}
+                </span>
+                <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
+                  {g.linhas.map((c) => (
+                    <li key={c.id} className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onPointerDown={(e) => iniciarPressao(c, e)}
+                        onPointerUp={cancelarPressao}
+                        onPointerLeave={cancelarPressao}
+                        onPointerCancel={cancelarPressao}
+                        onPointerMove={(e) => moverPressao(e)}
+                        onContextMenu={(e) => e.preventDefault()}
+                        onClick={() => {
+                          if (pressao.current.disparou) {
+                            pressao.current.disparou = false;
+                            return;
+                          }
+                          alternarRastreamento(c);
+                        }}
+                        aria-pressed={estaRastreando(c.id)}
+                        aria-label={
+                          estaRastreando(c.id)
+                            ? `Parar de rastrear ${c.letreiro} no mapa`
+                            : `Rastrear ${c.letreiro} no mapa`
+                        }
+                        className={
+                          "-mx-1 my-0 flex flex-col items-start rounded-lg bg-gradient-to-b from-[#201e19] to-[#131211] px-3.5 py-1.5 cursor-pointer border-0 select-none [-webkit-touch-callout:none] " +
+                          (estaRastreando(c.id)
+                            ? "shadow-[inset_0_0_14px_rgba(255,179,0,0.16),0_0_0_2px_#fbfbfa,0_0_0_4px_#ffb300]"
+                            : "")
+                        }
+                      >
+                        <span className="font-mono text-[13px] font-black uppercase tracking-[0.08em] text-[#ffb300]">
+                          {c.letreiro}
+                        </span>
+                        <span className="max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-tight text-[#c9c5ba]">
+                          {c.descricao}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className={
+                          "flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg border-0 bg-transparent " +
+                          (tem(c.id)
+                            ? "text-[#a06d00] hover:bg-[#eceeea]"
+                            : "text-[#9aa0a6] hover:bg-[#eceeea] hover:text-[#191a1c]")
+                        }
+                        aria-pressed={tem(c.id)}
+                        aria-label={
+                          tem(c.id)
+                            ? `Remover ${c.letreiro} das favoritas`
+                            : `Salvar ${c.letreiro} nas favoritas`
+                        }
+                        onClick={() => alternar(c)}
+                      >
+                        <Estrela cheia={tem(c.id)} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </Fragment>
+            ))}
             {rastreadas.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
                 {rastreadas.map((l) => {
