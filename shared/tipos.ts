@@ -1,7 +1,10 @@
+export type Sentido = "ida" | "volta";
+
 export type Linha = {
   readonly id: number;
   readonly letreiro: string;
   readonly descricao: string;
+  readonly sentido?: Sentido;
 };
 
 export type PosicaoVeiculo = {

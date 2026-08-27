@@ -31,8 +31,10 @@ export function Mapa(props: {
   linhas: readonly Linha[];
   posicoes: Readonly<Record<number, EstadoPosicoes>>;
   rotas: Readonly<Record<number, EstadoRota>>;
+  expandido: boolean;
+  aoAlternarExpansao: () => void;
 }) {
-  const { linhas, posicoes, rotas } = props;
+  const { linhas, posicoes, rotas, expandido, aoAlternarExpansao } = props;
   const variasLinhas = linhas.length > 1;
 
   const [quadro, setQuadro] = useState<Ponto & { zoom: number }>({
@@ -70,6 +72,18 @@ export function Mapa(props: {
     observador.observe(elemento);
     return () => observador.disconnect();
   }, []);
+
+  useEffect(() => {
+    const elemento = containerRef.current;
+    if (elemento === null) return;
+    const largura = elemento.clientWidth;
+    const altura = elemento.clientHeight;
+    setTamanho((atual) =>
+      atual.largura === largura && atual.altura === altura
+        ? atual
+        : { largura, altura },
+    );
+  }, [expandido]);
 
   useEffect(() => {
     if (linhas.length === 0) {
@@ -372,6 +386,47 @@ export function Mapa(props: {
         })()}
 
       <div className="absolute right-3 top-3 flex flex-col items-end gap-2">
+        <button
+          type="button"
+          className={
+            "flex h-8 w-8 items-center justify-center rounded-lg border bg-white p-0 text-[#191a1c] shadow-[0_2px_10px_rgba(23,24,26,0.12)] hover:bg-[#eceeea] " +
+            (expandido ? "border-[#a06d00]" : "border-[#dcdedb]")
+          }
+          aria-pressed={expandido}
+          aria-label={expandido ? "Recolher mapa" : "Expandir mapa"}
+          title={expandido ? "Recolher mapa (Esc)" : "Expandir mapa"}
+          onClick={aoAlternarExpansao}
+        >
+          {expandido ? (
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" />
+            </svg>
+          ) : (
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+            </svg>
+          )}
+        </button>
         <div className="flex flex-col overflow-hidden rounded-lg border border-[#dcdedb] shadow-[0_2px_10px_rgba(23,24,26,0.12)]">
           <button
             type="button"

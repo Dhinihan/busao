@@ -4,6 +4,7 @@ import type {
   PosicoesDaLinha,
   PontoRota,
   RotaDaLinha,
+  Sentido,
   StatusApi,
 } from "./tipos.ts";
 
@@ -66,7 +67,10 @@ export function paraLinha(bruto: unknown): Linha | null {
     : ehTexto(parte2)
       ? parte2
       : "";
-  const rumoAoSecundario = campoDe(bruto, "sl") === 2;
+  // sl=1 rumo ao terminal primário (ida), sl=2 rumo ao secundário (volta).
+  const sentido: Sentido | undefined =
+    campoDe(bruto, "sl") === 1 ? "ida" : campoDe(bruto, "sl") === 2 ? "volta" : undefined;
+  const rumoAoSecundario = sentido === "volta";
   const destino = (
     rumoAoSecundario ? [secundario, primario] : [primario, secundario]
   )
@@ -76,6 +80,7 @@ export function paraLinha(bruto: unknown): Linha | null {
     id,
     letreiro: sufixo === "" ? parte1 : `${parte1}-${sufixo}`,
     descricao: destino ?? "",
+    sentido,
   };
 }
 
