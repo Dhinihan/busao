@@ -298,45 +298,55 @@ export function Mapa(props: {
 
       {linhas.map((linha) => {
         const cor = corDoLetreiro(linha.letreiro);
-        const veiculos = posicoes[linha.id]?.dados?.veiculos ?? [];
-        return veiculos.map((veiculo) => {
-          const tela = pontoParaPixelDeTela(veiculo, {
-            centro: quadro,
-            zoom: quadro.zoom,
-            largura: tamanho.largura,
-            altura: tamanho.altura,
-          });
-          return (
-            <div
-              key={`${linha.id}-${veiculo.prefixo}`}
-              className="group absolute"
-              style={{ left: `${tela.x}px`, top: `${tela.y}px` }}
-              title={
-                linha.letreiro +
-                " · " +
-                veiculo.prefixo +
-                (veiculo.acessivel ? " · acessível" : "")
-              }
-            >
-              {variasLinhas && (
-                <span className="pointer-events-none absolute bottom-[23px] left-0 -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-1 py-px font-mono text-[10px] font-bold leading-tight text-amber-300">
-                  {linha.letreiro}
-                </span>
-              )}
-              <div
-                className={
-                  "h-[14px] w-[14px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-neutral-900" +
-                  (cor === null ? " bg-amber-400" : "")
-                }
-                style={cor === null ? undefined : { backgroundColor: cor }}
-              />
-              <div className="pointer-events-none absolute left-3 top-[-8px] hidden whitespace-nowrap rounded-md border border-[#dcdedb] bg-[#fbfbfa] px-1.5 py-0.5 font-mono text-xs text-[#191a1c] shadow-[0_2px_8px_rgba(23,24,26,0.15)] group-hover:block">
-                {linha.letreiro} · {veiculo.prefixo}
-                {veiculo.acessivel ? " · acessível" : ""}
-              </div>
-            </div>
-          );
-        });
+        const estadoLinha = posicoes[linha.id];
+        const veiculos = estadoLinha?.dados?.veiculos ?? [];
+        if (veiculos.length === 0) return null;
+        // Remount por ciclo: reinicia o pop sincronizado ao dado novo.
+        return (
+          <div
+            key={`ciclo-${linha.id}-${estadoLinha?.atualizadoEm?.getTime() ?? 0}`}
+            className="camada-onibus pointer-events-none absolute inset-0"
+          >
+            {veiculos.map((veiculo) => {
+              const tela = pontoParaPixelDeTela(veiculo, {
+                centro: quadro,
+                zoom: quadro.zoom,
+                largura: tamanho.largura,
+                altura: tamanho.altura,
+              });
+              return (
+                <div
+                  key={`${linha.id}-${veiculo.prefixo}`}
+                  className="group marcador-onibus pointer-events-auto absolute"
+                  style={{ left: `${tela.x}px`, top: `${tela.y}px` }}
+                  title={
+                    linha.letreiro +
+                    " · " +
+                    veiculo.prefixo +
+                    (veiculo.acessivel ? " · acessível" : "")
+                  }
+                >
+                  {variasLinhas && (
+                    <span className="pointer-events-none absolute bottom-[23px] left-0 -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-1 py-px font-mono text-[10px] font-bold leading-tight text-amber-300">
+                      {linha.letreiro}
+                    </span>
+                  )}
+                  <div
+                    className={
+                      "disco-onibus h-[14px] w-[14px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-neutral-900" +
+                      (cor === null ? " bg-amber-400" : "")
+                    }
+                    style={cor === null ? undefined : { backgroundColor: cor }}
+                  />
+                  <div className="pointer-events-none absolute left-3 top-[-8px] hidden whitespace-nowrap rounded-md border border-[#dcdedb] bg-[#fbfbfa] px-1.5 py-0.5 font-mono text-xs text-[#191a1c] shadow-[0_2px_8px_rgba(23,24,26,0.15)] group-hover:block">
+                    {linha.letreiro} · {veiculo.prefixo}
+                    {veiculo.acessivel ? " · acessível" : ""}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
       })}
 
       {localizacao.estado.ponto !== null &&

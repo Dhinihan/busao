@@ -4,11 +4,15 @@ import { Estrela } from "./Estrela";
 import { Mapa } from "./Mapa";
 import { PainelHorarios } from "./PainelHorarios";
 import {
+  avisosDeRodada,
+  faseDoCiclo,
+  tituloAtualizacao,
   useFavoritas,
   usePosicoesVarias,
   useRotasVarias,
   useValorPostergado,
 } from "./hooks";
+import type { FaseCiclo } from "./hooks";
 import type { Linha, StatusApi } from "../shared/tipos.ts";
 
 const rotulo =
@@ -30,6 +34,27 @@ function Led(props: { classe?: string; children: preact.ComponentChildren }) {
 
 const pontoVivo =
   "h-2 w-2 shrink-0 animate-pulse rounded-full motion-reduce:animate-none";
+
+// Ponto de polling: respira sempre e dispara o blip (anel + decaimento
+// âmbar) a cada dado novo — o remount por key reinicia a animação
+// sincronizado com a resposta da SPTrans, sem relógio em JS.
+function PontoCiclo(props: {
+  readonly fase: FaseCiclo;
+  readonly momento: Date | null;
+}) {
+  return (
+    <span
+      key={props.momento?.getTime() ?? 0}
+      className={
+        "h-2 w-2 shrink-0 rounded-full ponto-ciclo transition-colors duration-700 " +
+        (props.fase === "atualizando"
+          ? "bg-[#ffb300]"
+          : "bg-[#0a6b3c]")
+      }
+      aria-hidden="true"
+    />
+  );
+}
 
 export function App() {
   const [status, setStatus] = useState<StatusApi | null>(null);
@@ -90,6 +115,37 @@ export function App() {
   const posicoes = usePosicoesVarias(rastreadas.map((l) => l.id));
   const rotas = useRotasVarias(rastreadas);
   const { favoritas, alternar, tem } = useFavoritas();
+
+  // Evento de frota chama atenção; ciclo rotineiro não. Aviso transitório
+  // sobre o mapa quando a contagem muda de forma significativa.
+  const [aviso, setAviso] = useState<{ chave: number; texto: string } | null>(
+    null,
+  );
+  const contagens = useRef<Map<number, number | null>>(new Map());
+
+  useEffect(() => {
+    if (rastreadas.length === 0) {
+      contagens.current.clear();
+      setAviso(null);
+      return;
+    }
+    const amostras = rastreadas.map((l) => ({
+      id: l.id,
+      letreiro: l.letreiro,
+      total: posicoes[l.id]?.dados?.veiculos.length ?? null,
+    }));
+    const { avisos, proxima } = avisosDeRodada(contagens.current, amostras);
+    contagens.current = proxima;
+    if (avisos.length > 0) {
+      setAviso({ chave: Date.now(), texto: avisos[0].texto });
+    }
+  }, [posicoes, rastreadas]);
+
+  useEffect(() => {
+    if (aviso === null) return;
+    const timer = window.setTimeout(() => setAviso(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [aviso]);
   const termoPostergado = useValorPostergado(termoBusca.trim(), 350);
 
   function alternarRastreamento(linha: Linha): void {
@@ -237,9 +293,17 @@ export function App() {
                   const estadoLinha = posicoes[l.id];
                   const dados = estadoLinha?.dados ?? null;
                   const erroRota = rotas[l.id]?.erro;
+                  const fase = faseDoCiclo(estadoLinha);
+                  const titulo =
+                    fase === "ao-vivo" || fase === "atualizando"
+                      ? tituloAtualizacao(
+                          (estadoLinha?.atualizadoEm ?? null),
+                        )
+                      : null;
                   return (
                     <p
                       key={l.id}
+                      title={titulo ?? undefined}
                       className="m-0 flex items-center gap-1.5 text-xs"
                     >
                       <span className="font-mono font-black">{l.letreiro}</span>
@@ -254,9 +318,9 @@ export function App() {
                         </span>
                       ) : (
                         <>
-                          <span
-                            className={pontoVivo + " bg-[#0a6b3c]"}
-                            aria-hidden="true"
+                          <PontoCiclo
+                            fase={fase}
+                            momento={estadoLinha?.atualizadoEm ?? null}
                           />
                           <span className="text-[#66696f]">
                             ao vivo · {dados.horario} ·{" "}
@@ -409,6 +473,17 @@ export function App() {
         )}
         {painel !== null && (
           <PainelHorarios linha={painel} aoFechar={() => setPainel(null)} />
+        )}
+        {aviso !== null && (
+          <div className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2">
+            <p
+              key={aviso.chave}
+              role="status"
+              className="pill-ciclo m-0 whitespace-nowrap rounded-full bg-neutral-900/95 px-4 py-1.5 font-mono text-xs font-bold text-amber-300 shadow-[0_6px_24px_rgba(23,24,26,0.35)]"
+            >
+              {aviso.texto}
+            </p>
+          </div>
         )}
       </main>
     </div>
