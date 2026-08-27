@@ -148,13 +148,90 @@ export type EstadoPosicoes = {
   readonly dados: PosicoesDaLinha | null;
   readonly erro: string | null;
   readonly atualizadoEm: Date | null;
+  readonly consultando: boolean;
 };
 
 const ESTADO_INICIAL: EstadoPosicoes = {
   dados: null,
   erro: null,
   atualizadoEm: null,
+  consultando: false,
 };
+
+export type FaseCiclo = "com-erro" | "aguardando" | "atualizando" | "ao-vivo";
+
+export function faseDoCiclo(estado: EstadoPosicoes | undefined): FaseCiclo {
+  if (estado?.erro !== null && estado?.erro !== undefined) return "com-erro";
+  if (estado === undefined || estado.dados === null) return "aguardando";
+  return estado.consultando ? "atualizando" : "ao-vivo";
+}
+
+function doisDigitos(valor: number): string {
+  return String(valor).padStart(2, "0");
+}
+
+export function tituloAtualizacao(quando: Date | null): string | null {
+  if (quando === null) return null;
+  return `atualizado às ${doisDigitos(quando.getHours())}:${doisDigitos(
+    quando.getMinutes(),
+  )}:${doisDigitos(quando.getSeconds())}`;
+}
+
+export type AmostraContagem = {
+  readonly id: number;
+  readonly letreiro: string;
+  readonly total: number | null;
+};
+
+export type AvisoRodada = {
+  readonly id: number;
+  readonly texto: string;
+};
+
+// Dif da frota por linha entre ciclos de polling. Evento vale anúncio;
+// ciclo rotineiro não. Vibração de ±1 ônibus entre leituras consecutivas
+// é ruído conhecido da SPTrans e fica quieto — só cruza zero ou |Δ| ≥ 2.
+// O histórico resultante contém apenas o que veio nas amostras: linha que
+// saiu do rastreamento esquece a última leitura, e ao voltar anuncia de
+// novo como primeira — sem delta contra dado velho de minutos atrás.
+export function avisosDeRodada(
+  antes: ReadonlyMap<number, number | null>,
+  amostras: readonly AmostraContagem[],
+): { readonly avisos: readonly AvisoRodada[]; readonly proxima: Map<number, number | null> } {
+  const proxima = new Map<number, number | null>();
+  const avisos: AvisoRodada[] = [];
+  for (const amostra of amostras) {
+    const anterior = antes.get(amostra.id);
+    proxima.set(amostra.id, amostra.total);
+    if (amostra.total === null) continue;
+    if (anterior === undefined || anterior === null) {
+      avisos.push({
+        id: amostra.id,
+        texto:
+          amostra.total === 0
+            ? `${amostra.letreiro} · nenhum ônibus circulando agora`
+            : `${amostra.letreiro} · ${amostra.total} ônibus em circulação`,
+      });
+      continue;
+    }
+    const diferenca = amostra.total - anterior;
+    if (
+      diferenca !== 0 &&
+      (Math.abs(diferenca) >= 2 || anterior === 0 || amostra.total === 0)
+    ) {
+      avisos.push({
+        id: amostra.id,
+        texto:
+          amostra.total === 0
+            ? `${amostra.letreiro} · nenhum ônibus circulando agora`
+            : diferenca > 0
+              ? `${amostra.letreiro} · +${diferenca} ônibus`
+              : `${amostra.letreiro} · −${-diferenca} ônibus`,
+      });
+    }
+  }
+  return { avisos, proxima };
+}
 
 export function usePosicoesVarias(
   ids: readonly number[],
@@ -201,12 +278,23 @@ export function usePosicoesVarias(
         () => controle.abort(),
         TIMEOUT_MS,
       );
+      if (!cancelado) {
+        setPorId((atual) => ({
+          ...atual,
+          [id]: { ...(atual[id] ?? ESTADO_INICIAL), consultando: true },
+        }));
+      }
       try {
         const dados = await api.posicoes(id, { sinal: controle.signal });
         if (!cancelado) {
           setPorId((atual) => ({
             ...atual,
-            [id]: { dados, erro: null, atualizadoEm: new Date() },
+            [id]: {
+              dados,
+              erro: null,
+              atualizadoEm: new Date(),
+              consultando: false,
+            },
           }));
         }
       } catch (erro) {
@@ -220,6 +308,7 @@ export function usePosicoesVarias(
             [id]: {
               ...(atual[id] ?? ESTADO_INICIAL),
               erro: mensagem,
+              consultando: false,
             },
           }));
         }
