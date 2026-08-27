@@ -173,7 +173,10 @@ export function App() {
 
   return (
     <div className="flex min-h-dvh flex-col-reverse bg-[#eceeea] text-[#191a1c] md:grid md:h-dvh md:grid-cols-[minmax(320px,380px)_1fr]">
-      <aside className="flex flex-col gap-[22px] border-t border-[#dcdedb] bg-[#fbfbfa] p-5 md:h-dvh md:overflow-y-auto md:border-r md:border-t-0">
+      <aside
+        inert={mapaExpandido}
+        className="flex flex-col gap-[22px] border-t border-[#dcdedb] bg-[#fbfbfa] p-5 md:h-dvh md:overflow-y-auto md:border-r md:border-t-0"
+      >
         <header className="flex items-center justify-between gap-2.5">
           <Led>busão·sp</Led>
         </header>

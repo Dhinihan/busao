@@ -379,8 +379,8 @@ export function Mapa(props: {
         <button
           type="button"
           className={
-            "flex h-8 w-8 items-center justify-center rounded-lg border border-[#dcdedb] bg-white p-0 text-[#191a1c] shadow-[0_2px_10px_rgba(23,24,26,0.12)] hover:bg-[#eceeea] " +
-            (expandido ? "border-[#a06d00]" : "")
+            "flex h-8 w-8 items-center justify-center rounded-lg border bg-white p-0 text-[#191a1c] shadow-[0_2px_10px_rgba(23,24,26,0.12)] hover:bg-[#eceeea] " +
+            (expandido ? "border-[#a06d00]" : "border-[#dcdedb]")
           }
           aria-pressed={expandido}
           aria-label={expandido ? "Recolher mapa" : "Expandir mapa"}
