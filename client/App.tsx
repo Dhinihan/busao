@@ -167,17 +167,19 @@ export function App() {
   const rotas = useRotasVarias(rastreadas);
   const { favoritas, alternar, tem } = useFavoritas();
 
-  // Evento de frota chama atenção; ciclo rotineiro não. Aviso transitório
-  // sobre o mapa quando a contagem muda de forma significativa.
-  const [aviso, setAviso] = useState<{ chave: number; texto: string } | null>(
-    null,
-  );
+  // Evento de frota chama atenção; ciclo rotineiro não. Fila de avisos
+  // transitórios sobre o mapa — uma rodada pode trazer eventos de várias
+  // linhas consultadas em sequência, que não podem se apagar entre si.
+  const [avisos, setAvisos] = useState<
+    readonly { readonly chave: number; readonly texto: string }[]
+  >([]);
   const contagens = useRef<Map<number, number | null>>(new Map());
+  const temporizadoresRef = useRef<number[]>([]);
 
   useEffect(() => {
     if (rastreadas.length === 0) {
       contagens.current.clear();
-      setAviso(null);
+      setAvisos([]);
       return;
     }
     const amostras = rastreadas.map((l) => ({
@@ -185,18 +187,33 @@ export function App() {
       letreiro: l.letreiro,
       total: posicoes[l.id]?.dados?.veiculos.length ?? null,
     }));
-    const { avisos, proxima } = avisosDeRodada(contagens.current, amostras);
+    const { avisos: novos, proxima } = avisosDeRodada(
+      contagens.current,
+      amostras,
+    );
     contagens.current = proxima;
-    if (avisos.length > 0) {
-      setAviso({ chave: Date.now(), texto: avisos[0].texto });
-    }
+    if (novos.length === 0) return;
+    const itens = novos.map((n, i) => ({
+      chave: Date.now() + i,
+      texto: n.texto,
+    }));
+    setAvisos((atuais) => [...atuais, ...itens].slice(-3));
+    const chaves = new Set(itens.map((i) => i.chave));
+    const timer = window.setTimeout(() => {
+      temporizadoresRef.current = temporizadoresRef.current.filter(
+        (t) => t !== timer,
+      );
+      setAvisos((atuais) => atuais.filter((a) => !chaves.has(a.chave)));
+    }, 3_400);
+    temporizadoresRef.current.push(timer);
   }, [posicoes, rastreadas]);
 
-  useEffect(() => {
-    if (aviso === null) return;
-    const timer = window.setTimeout(() => setAviso(null), 3200);
-    return () => window.clearTimeout(timer);
-  }, [aviso]);
+  useEffect(
+    () => () => {
+      for (const t of temporizadoresRef.current) window.clearTimeout(t);
+    },
+    [],
+  );
   const termoPostergado = useValorPostergado(termoBusca.trim(), 350);
 
   function alternarRastreamento(linha: Linha): void {
@@ -555,17 +572,22 @@ export function App() {
         {painel !== null && (
           <PainelHorarios linha={painel} aoFechar={() => setPainel(null)} />
         )}
-        {aviso !== null && (
-          <div className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2">
+        {/* Região viva sempre montada: aria-live precisa existir no DOM
+            antes do conteúdo para o anúncio ser confiável. */}
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none absolute left-1/2 top-3 z-10 flex -translate-x-1/2 flex-col items-center gap-1.5"
+        >
+          {avisos.map((a) => (
             <p
-              key={aviso.chave}
-              role="status"
+              key={a.chave}
               className="pill-ciclo m-0 whitespace-nowrap rounded-full bg-neutral-900/95 px-4 py-1.5 font-mono text-xs font-bold text-amber-300 shadow-[0_6px_24px_rgba(23,24,26,0.35)]"
             >
-              {aviso.texto}
+              {a.texto}
             </p>
-          </div>
-        )}
+          ))}
+        </div>
       </main>
     </div>
   );

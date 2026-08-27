@@ -134,3 +134,20 @@ test("avisos de rodada ignoram leitura sem dado mas mantêm histórico da linha"
   assert.equal(resultado.proxima.get(30), null);
   assert.equal(resultado.proxima.get(31), 2);
 });
+
+test("linha fora das amostras sai do histórico e volta como primeira leitura", () => {
+  const antes = new Map<number, number | null>([
+    [7, 3],
+    [8, 2],
+  ]);
+  const semSete = avisosDeRodada(antes, [{ id: 8, letreiro: "8000-10", total: 2 }]);
+  assert.equal(semSete.proxima.has(7), false);
+
+  const deVolta = avisosDeRodada(semSete.proxima, [
+    { id: 7, letreiro: "N106-11", total: 3 },
+  ]);
+  assert.deepEqual(
+    deVolta.avisos.map((a) => a.texto),
+    ["N106-11 · 3 ônibus em circulação"],
+  );
+});

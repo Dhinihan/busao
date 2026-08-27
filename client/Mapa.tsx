@@ -57,7 +57,30 @@ export function Mapa(props: {
   } | null>(null);
   const enquadrouAte = useRef<Set<number>>(new Set());
   const centralizouRef = useRef(false);
+  const marcacoesRef = useRef<HTMLDivElement | null>(null);
   const localizacao = useLocalizacao();
+
+  // Reinicia as animações da camada sem desmontar marcadores: a chave é
+  // derivada de atualizadoEm (não do ciclo de vida do elemento), e o
+  // replay por reflow preserva hover/title entre ciclos de polling.
+  const chaveCiclos = linhas
+    .map((l) => `${l.id}:${posicoes[l.id]?.atualizadoEm?.getTime() ?? 0}`)
+    .join("|");
+  useEffect(() => {
+    const raiz = marcacoesRef.current;
+    if (raiz === null) return;
+    const animados = raiz.querySelectorAll(
+      ".camada-onibus, .marcador-onibus, .disco-onibus",
+    );
+    if (animados.length === 0) return;
+    for (const el of animados) {
+      if (el instanceof HTMLElement) el.style.animation = "none";
+    }
+    void raiz.offsetWidth;
+    for (const el of animados) {
+      if (el instanceof HTMLElement) el.style.animation = "";
+    }
+  }, [chaveCiclos]);
 
   useEffect(() => {
     const elemento = containerRef.current;
@@ -310,58 +333,56 @@ export function Mapa(props: {
         </svg>
       )}
 
-      {linhas.map((linha) => {
-        const cor = corDoLetreiro(linha.letreiro);
-        const estadoLinha = posicoes[linha.id];
-        const veiculos = estadoLinha?.dados?.veiculos ?? [];
-        if (veiculos.length === 0) return null;
-        // Remount por ciclo: reinicia o pop sincronizado ao dado novo.
-        return (
-          <div
-            key={`ciclo-${linha.id}-${estadoLinha?.atualizadoEm?.getTime() ?? 0}`}
-            className="camada-onibus pointer-events-none absolute inset-0"
-          >
-            {veiculos.map((veiculo) => {
-              const tela = pontoParaPixelDeTela(veiculo, {
-                centro: quadro,
-                zoom: quadro.zoom,
-                largura: tamanho.largura,
-                altura: tamanho.altura,
-              });
-              return (
-                <div
-                  key={`${linha.id}-${veiculo.prefixo}`}
-                  className="group marcador-onibus pointer-events-auto absolute"
-                  style={{ left: `${tela.x}px`, top: `${tela.y}px` }}
-                  title={
-                    linha.letreiro +
-                    " · " +
-                    veiculo.prefixo +
-                    (veiculo.acessivel ? " · acessível" : "")
-                  }
-                >
-                  {variasLinhas && (
-                    <span className="pointer-events-none absolute bottom-[23px] left-0 -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-1 py-px font-mono text-[10px] font-bold leading-tight text-amber-300">
-                      {linha.letreiro}
-                    </span>
-                  )}
+      <div ref={marcacoesRef} className="pointer-events-none absolute inset-0">
+        {linhas.map((linha) => {
+          const cor = corDoLetreiro(linha.letreiro);
+          const estadoLinha = posicoes[linha.id];
+          const veiculos = estadoLinha?.dados?.veiculos ?? [];
+          if (veiculos.length === 0) return null;
+          return (
+            <div key={linha.id} className="camada-onibus absolute inset-0">
+              {veiculos.map((veiculo) => {
+                const tela = pontoParaPixelDeTela(veiculo, {
+                  centro: quadro,
+                  zoom: quadro.zoom,
+                  largura: tamanho.largura,
+                  altura: tamanho.altura,
+                });
+                return (
                   <div
-                    className={
-                      "disco-onibus h-[14px] w-[14px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-neutral-900" +
-                      (cor === null ? " bg-amber-400" : "")
+                    key={`${linha.id}-${veiculo.prefixo}`}
+                    className="group marcador-onibus pointer-events-auto absolute"
+                    style={{ left: `${tela.x}px`, top: `${tela.y}px` }}
+                    title={
+                      linha.letreiro +
+                      " · " +
+                      veiculo.prefixo +
+                      (veiculo.acessivel ? " · acessível" : "")
                     }
-                    style={cor === null ? undefined : { backgroundColor: cor }}
-                  />
-                  <div className="pointer-events-none absolute left-3 top-[-8px] hidden whitespace-nowrap rounded-md border border-[#dcdedb] bg-[#fbfbfa] px-1.5 py-0.5 font-mono text-xs text-[#191a1c] shadow-[0_2px_8px_rgba(23,24,26,0.15)] group-hover:block">
+                  >
+                    {variasLinhas && (
+                      <span className="pointer-events-none absolute bottom-[23px] left-0 -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-1 py-px font-mono text-[10px] font-bold leading-tight text-amber-300">
+                        {linha.letreiro}
+                      </span>
+                    )}
+                    <div
+                      className={
+                        "disco-onibus h-[14px] w-[14px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-neutral-900" +
+                        (cor === null ? " bg-amber-400" : "")
+                      }
+                      style={cor === null ? undefined : { backgroundColor: cor }}
+                    />
+                    <div className="pointer-events-none absolute left-3 top-[-8px] hidden whitespace-nowrap rounded-md border border-[#dcdedb] bg-[#fbfbfa] px-1.5 py-0.5 font-mono text-xs text-[#191a1c] shadow-[0_2px_8px_rgba(23,24,26,0.15)] group-hover:block">
                     {linha.letreiro} · {veiculo.prefixo}
                     {veiculo.acessivel ? " · acessível" : ""}
                   </div>
                 </div>
               );
-            })}
-          </div>
-        );
-      })}
+              })}
+            </div>
+          );
+        })}
+      </div>
 
       {localizacao.estado.ponto !== null &&
         (() => {

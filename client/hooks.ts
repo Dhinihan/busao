@@ -191,11 +191,14 @@ export type AvisoRodada = {
 // Dif da frota por linha entre ciclos de polling. Evento vale anúncio;
 // ciclo rotineiro não. Vibração de ±1 ônibus entre leituras consecutivas
 // é ruído conhecido da SPTrans e fica quieto — só cruza zero ou |Δ| ≥ 2.
+// O histórico resultante contém apenas o que veio nas amostras: linha que
+// saiu do rastreamento esquece a última leitura, e ao voltar anuncia de
+// novo como primeira — sem delta contra dado velho de minutos atrás.
 export function avisosDeRodada(
   antes: ReadonlyMap<number, number | null>,
   amostras: readonly AmostraContagem[],
 ): { readonly avisos: readonly AvisoRodada[]; readonly proxima: Map<number, number | null> } {
-  const proxima = new Map(antes);
+  const proxima = new Map<number, number | null>();
   const avisos: AvisoRodada[] = [];
   for (const amostra of amostras) {
     const anterior = antes.get(amostra.id);
