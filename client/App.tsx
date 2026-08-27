@@ -40,6 +40,25 @@ export function App() {
   const [rastreadas, setRastreadas] = useState<readonly Linha[]>([]);
   const [avisoDispensado, setAvisoDispensado] = useState(false);
   const [painel, setPainel] = useState<Linha | null>(null);
+  const [mapaExpandido, setMapaExpandido] = useState(false);
+
+  useEffect(() => {
+    if (!mapaExpandido) return;
+    const aoTeclar = (evento: KeyboardEvent) => {
+      if (evento.key === "Escape") setMapaExpandido(false);
+    };
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, [mapaExpandido]);
+
+  useEffect(() => {
+    if (!mapaExpandido) return;
+    const anterior = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = anterior;
+    };
+  }, [mapaExpandido]);
 
   const pressao = useRef<{
     timer: number | null;
@@ -154,7 +173,10 @@ export function App() {
 
   return (
     <div className="flex min-h-dvh flex-col-reverse bg-[#eceeea] text-[#191a1c] md:grid md:h-dvh md:grid-cols-[minmax(320px,380px)_1fr]">
-      <aside className="flex flex-col gap-[22px] border-t border-[#dcdedb] bg-[#fbfbfa] p-5 md:h-dvh md:overflow-y-auto md:border-r md:border-t-0">
+      <aside
+        inert={mapaExpandido}
+        className="flex flex-col gap-[22px] border-t border-[#dcdedb] bg-[#fbfbfa] p-5 md:h-dvh md:overflow-y-auto md:border-r md:border-t-0"
+      >
         <header className="flex items-center justify-between gap-2.5">
           <Led>busão·sp</Led>
         </header>
@@ -374,8 +396,21 @@ export function App() {
         </section>
       </aside>
 
-      <main className="relative flex h-[44dvh] shrink-0 md:h-dvh">
-        <Mapa linhas={rastreadas} posicoes={posicoes} rotas={rotas} />
+      <main
+        className={
+          "flex shrink-0 " +
+          (mapaExpandido
+            ? "fixed inset-0 z-50 h-dvh"
+            : "relative h-[44dvh] md:h-dvh")
+        }
+      >
+        <Mapa
+          linhas={rastreadas}
+          posicoes={posicoes}
+          rotas={rotas}
+          expandido={mapaExpandido}
+          aoAlternarExpansao={() => setMapaExpandido((atual) => !atual)}
+        />
 
         {rastreadas.length === 0 && !avisoDispensado && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center">
