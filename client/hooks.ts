@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { api, ErroApi } from "./api.ts";
 import { ehLinha } from "../shared/parsers.ts";
-import type { Linha, PosicoesDaLinha, RotaDaLinha } from "../shared/tipos.ts";
+import type { Linha, PosicoesDaLinha, RotaDaLinha, Sentido } from "../shared/tipos.ts";
 
 export function useValorPostergado<T>(valor: T, atrasoMs: number): T {
   const [postergado, setPostergado] = useState(valor);
@@ -13,6 +13,15 @@ export function useValorPostergado<T>(valor: T, atrasoMs: number): T {
 }
 
 const CHAVE_FAVORITAS = "busao:favoritas";
+
+// Favoritas salvas antes do campo `sentido` existir não codificam direção;
+// o `id` (=cl da SPTrans) é único por sentido, então a busca pelo letreiro
+// base devolve a mesma linha já com sl — casando por id recuperamos o sentido.
+const TEMPO_MIGRACAO_MS = 15_000;
+
+function letreiroBase(letreiro: string): string {
+  return letreiro.split("-")[0] ?? letreiro;
+}
 
 function lerFavoritas(): Linha[] {
   try {
@@ -36,6 +45,56 @@ export function useFavoritas(): {
   useEffect(() => {
     localStorage.setItem(CHAVE_FAVORITAS, JSON.stringify(favoritas));
   }, [favoritas]);
+
+  useEffect(() => {
+    const pendentes = favoritas.filter((l) => l.sentido === undefined);
+    if (pendentes.length === 0) return;
+
+    let cancelado = false;
+    const controle = new AbortController();
+    const tempoEsgotado = window.setTimeout(
+      () => controle.abort(),
+      TEMPO_MIGRACAO_MS,
+    );
+
+    void (async () => {
+      const recuperados = new Map<number, Sentido>();
+      for (const linha of pendentes) {
+        if (cancelado) return;
+        const termo = letreiroBase(linha.letreiro);
+        if (termo.length < 3) continue;
+        try {
+          const encontradas = await api.buscarLinhas(termo, {
+            sinal: controle.signal,
+          });
+          const casada = encontradas.find((e) => e.id === linha.id);
+          if (casada?.sentido !== undefined) {
+            recuperados.set(linha.id, casada.sentido);
+          }
+        } catch {
+          // servidor fora ou sem token: melhor esforço — tenta de novo no
+          // próximo boot; não interrompemos por linha não encontrada (a busca
+          // devolve lista vazia, só falha de transporte cai aqui).
+          return;
+        }
+      }
+      if (cancelado || recuperados.size === 0) return;
+      setFavoritas((atuais) =>
+        atuais.map((a) => {
+          const sentido = recuperados.get(a.id);
+          return sentido === undefined ? a : { ...a, sentido };
+        }),
+      );
+    })();
+
+    return () => {
+      cancelado = true;
+      window.clearTimeout(tempoEsgotado);
+      controle.abort();
+    };
+    // Uma única tentativa por boot: legadas sem sentido só existem na carga
+    // inicial do localStorage; novas favoritas já nascem com `sentido`.
+  }, []);
 
   useEffect(() => {
     function aoMudarEmOutraAba(evento: StorageEvent): void {

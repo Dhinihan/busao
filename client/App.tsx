@@ -1,8 +1,10 @@
+import { Fragment } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api, ErroApi } from "./api";
 import { Estrela } from "./Estrela";
 import { Mapa } from "./Mapa";
 import { PainelHorarios } from "./PainelHorarios";
+import { Casa, Predio } from "./Sentidos";
 import {
   useFavoritas,
   usePosicoesVarias,
@@ -30,6 +32,32 @@ function Led(props: { classe?: string; children: preact.ComponentChildren }) {
 
 const pontoVivo =
   "h-2 w-2 shrink-0 animate-pulse rounded-full motion-reduce:animate-none";
+
+type ChaveGrupo = "ida" | "volta" | "neutro";
+
+const CHAVES_GRUPO = ["ida", "volta", "neutro"] as const;
+
+const ROTULOS_GRUPO: Readonly<Record<ChaveGrupo, string>> = {
+  ida: "Ida",
+  volta: "Volta",
+  neutro: "Sem sentido",
+};
+
+function separarPorSentido(
+  linhas: readonly Linha[],
+): Readonly<Record<ChaveGrupo, readonly Linha[]>> {
+  const grupos: Record<ChaveGrupo, Linha[]> = {
+    ida: [],
+    volta: [],
+    neutro: [],
+  };
+  for (const linha of linhas) {
+    if (linha.sentido === "ida") grupos.ida.push(linha);
+    else if (linha.sentido === "volta") grupos.volta.push(linha);
+    else grupos.neutro.push(linha);
+  }
+  return grupos;
+}
 
 export function App() {
   const [status, setStatus] = useState<StatusApi | null>(null);
@@ -151,6 +179,11 @@ export function App() {
     ...favoritas,
     ...rastreadas.filter((r) => !tem(r.id)),
   ];
+  const porSentido = separarPorSentido(chips);
+  const gruposVisiveis = CHAVES_GRUPO.map((chave) => ({
+    chave,
+    linhas: porSentido[chave],
+  })).filter((g) => g.linhas.length > 0);
 
   return (
     <div className="flex min-h-dvh flex-col-reverse bg-[#eceeea] text-[#191a1c] md:grid md:h-dvh md:grid-cols-[minmax(320px,380px)_1fr]">
@@ -170,10 +203,18 @@ export function App() {
         )}
 
         {chips.length > 0 && (
-          <nav aria-label="Linhas favoritas e rastreadas">
-            <span className={rotulo}>Favoritas</span>
-            <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
-              {chips.map((c) => (
+          <nav
+            aria-label="Linhas favoritas e rastreadas"
+            className="[&>*+*]:mt-4"
+          >
+            {gruposVisiveis.map((g) => (
+              <Fragment key={g.chave}>
+                <span className={rotulo}>
+                  {g.chave === "ida" ? <Predio /> : g.chave === "volta" ? <Casa /> : null}
+                  {ROTULOS_GRUPO[g.chave]}
+                </span>
+                <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
+                  {g.linhas.map((c) => (
                 <li key={c.id} className="flex items-center gap-1">
                   <button
                     type="button"
@@ -229,8 +270,10 @@ export function App() {
                     <Estrela cheia={tem(c.id)} />
                   </button>
                 </li>
-              ))}
-            </ul>
+                  ))}
+                </ul>
+              </Fragment>
+            ))}
             {rastreadas.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
                 {rastreadas.map((l) => {
