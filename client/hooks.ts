@@ -23,13 +23,19 @@ function letreiroBase(letreiro: string): string {
   return letreiro.split("-")[0] ?? letreiro;
 }
 
+function ehSentido(valor: unknown): valor is Sentido {
+  return valor === "ida" || valor === "volta";
+}
+
 function lerFavoritas(): Linha[] {
   try {
     const cru = localStorage.getItem(CHAVE_FAVORITAS);
     if (cru === null) return [];
     const bruto: unknown = JSON.parse(cru);
     if (!Array.isArray(bruto)) return [];
-    return bruto.filter(ehLinha);
+    return bruto.filter(ehLinha).map((linha) =>
+      ehSentido(linha.sentido) ? linha : { ...linha, sentido: undefined },
+    );
   } catch {
     return [];
   }
@@ -59,32 +65,47 @@ export function useFavoritas(): {
 
     void (async () => {
       const recuperados = new Map<number, Sentido>();
+      // Um termo por letreiro base: ida e volta da mesma linha pendem juntos
+      // e uma única busca devolve os dois sentidos.
+      const termos = new Map<string, number[]>();
       for (const linha of pendentes) {
-        if (cancelado) return;
         const termo = letreiroBase(linha.letreiro);
         if (termo.length < 3) continue;
+        const ids = termos.get(termo) ?? [];
+        ids.push(linha.id);
+        termos.set(termo, ids);
+      }
+
+      const aplicar = (): void => {
+        if (cancelado || recuperados.size === 0) return;
+        setFavoritas((atuais) =>
+          atuais.map((a) => {
+            const sentido = recuperados.get(a.id);
+            return sentido === undefined ? a : { ...a, sentido };
+          }),
+        );
+      };
+
+      for (const [termo, ids] of termos) {
+        if (cancelado) return;
         try {
           const encontradas = await api.buscarLinhas(termo, {
             sinal: controle.signal,
           });
-          const casada = encontradas.find((e) => e.id === linha.id);
-          if (casada?.sentido !== undefined) {
-            recuperados.set(linha.id, casada.sentido);
+          for (const id of ids) {
+            const casada = encontradas.find((e) => e.id === id);
+            if (casada?.sentido !== undefined) {
+              recuperados.set(id, casada.sentido);
+            }
           }
         } catch {
-          // servidor fora ou sem token: melhor esforço — tenta de novo no
-          // próximo boot; não interrompemos por linha não encontrada (a busca
-          // devolve lista vazia, só falha de transporte cai aqui).
+          // servidor fora, sem token ou orçamento esgotado: commita o que já
+          // resolveu — o restante tenta de novo no próximo boot.
+          aplicar();
           return;
         }
       }
-      if (cancelado || recuperados.size === 0) return;
-      setFavoritas((atuais) =>
-        atuais.map((a) => {
-          const sentido = recuperados.get(a.id);
-          return sentido === undefined ? a : { ...a, sentido };
-        }),
-      );
+      aplicar();
     })();
 
     return () => {
