@@ -35,7 +35,7 @@ const pontoVivo =
 
 type ChaveGrupo = "ida" | "volta" | "neutro";
 
-const CHAVES_GRUPO = ["ida", "volta", "neutro"] as const;
+const CHAVES_GRUPO = ["neutro", "ida", "volta"] as const;
 
 const ROTULOS_GRUPO: Readonly<Record<ChaveGrupo, string>> = {
   ida: "Ida",
