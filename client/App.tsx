@@ -4,17 +4,11 @@ import { api, ErroApi } from "./api";
 import { Estrela } from "./Estrela";
 import { Mapa } from "./Mapa";
 import { PainelHorarios } from "./PainelHorarios";
+import { PainelParada } from "./PainelParada";
 import { Casa, Predio } from "./Sentidos";
-import {
-  avisosDeRodada,
-  faseDoCiclo,
-  tituloAtualizacao,
-  useFavoritas,
-  usePosicoesVarias,
-  useRotasVarias,
-  useValorPostergado,
-} from "./hooks";
+import { avisosDeRodada, faseDoCiclo, tituloAtualizacao, useFavoritas, usePosicoesVarias, useRotasVarias, useValorPostergado } from "./hooks";
 import type { FaseCiclo } from "./hooks";
+import type { Parada } from "../shared/paradas";
 import type { Linha, StatusApi } from "../shared/tipos.ts";
 
 const rotulo =
@@ -97,6 +91,7 @@ export function App() {
   const [rastreadas, setRastreadas] = useState<readonly Linha[]>([]);
   const [avisoDispensado, setAvisoDispensado] = useState(false);
   const [painel, setPainel] = useState<Linha | null>(null);
+  const [paradaSelecionada, setParadaSelecionada] = useState<Parada | null>(null);
   const [mapaExpandido, setMapaExpandido] = useState(false);
 
   useEffect(() => {
@@ -537,6 +532,8 @@ export function App() {
           rotas={rotas}
           expandido={mapaExpandido}
           aoAlternarExpansao={() => setMapaExpandido((atual) => !atual)}
+          paradaSelecionada={paradaSelecionada}
+          aoSelecionarParada={setParadaSelecionada}
         />
 
         {rastreadas.length === 0 && !avisoDispensado && (
@@ -571,6 +568,14 @@ export function App() {
         )}
         {painel !== null && (
           <PainelHorarios linha={painel} aoFechar={() => setPainel(null)} />
+        )}
+        {paradaSelecionada !== null && (
+          <PainelParada
+            parada={paradaSelecionada}
+            aoFechar={() => setParadaSelecionada(null)}
+            aoRastrear={alternarRastreamento}
+            estaRastreando={estaRastreando}
+          />
         )}
         {/* Região viva sempre montada: aria-live precisa existir no DOM
             antes do conteúdo para o anúncio ser confiável. */}

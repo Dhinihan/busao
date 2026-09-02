@@ -10,16 +10,22 @@ import {
   type Pixel,
   type Ponto,
 } from "../shared/tile-math";
+import { paradasNoQuadro } from "../shared/paradas";
+import type { Parada } from "../shared/paradas";
 import {
   useLocalizacao,
   type EstadoPosicoes,
   type EstadoRota,
 } from "./hooks";
+import { useParadas } from "./paradas";
 import { corDoLetreiro } from "../shared/regioes.ts";
 import type { Linha } from "../shared/tipos.ts";
 
 const ZOOM_MINIMO = 0;
 const ZOOM_MAXIMO = 18;
+const ZOOM_PARADAS = 15;
+const MARGEM_QUADRO_PX = 48;
+const MAX_PARADAS_TELA = 1500;
 
 const pontoVivoMapa =
   "h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#0a6b3c] motion-reduce:animate-none";
@@ -33,8 +39,18 @@ export function Mapa(props: {
   rotas: Readonly<Record<number, EstadoRota>>;
   expandido: boolean;
   aoAlternarExpansao: () => void;
+  paradaSelecionada: Parada | null;
+  aoSelecionarParada: (parada: Parada) => void;
 }) {
-  const { linhas, posicoes, rotas, expandido, aoAlternarExpansao } = props;
+  const {
+    linhas,
+    posicoes,
+    rotas,
+    expandido,
+    aoAlternarExpansao,
+    paradaSelecionada,
+    aoSelecionarParada,
+  } = props;
   const variasLinhas = linhas.length > 1;
 
   const [quadro, setQuadro] = useState<Ponto & { zoom: number }>({
@@ -255,6 +271,40 @@ export function Mapa(props: {
         })
       : [];
 
+  const paradas = useParadas(quadro.zoom >= ZOOM_PARADAS);
+  const paradasVisiveis = (() => {
+    if (
+      paradas.paradas === null ||
+      quadro.zoom < ZOOM_PARADAS ||
+      tamanho.largura <= 0 ||
+      tamanho.altura <= 0
+    ) {
+      return null;
+    }
+    const centroPixel = mundoEmPixel(quadro, quadro.zoom);
+    const cantoA = pixelEmMundo(
+      {
+        x: centroPixel.x - tamanho.largura / 2 - MARGEM_QUADRO_PX,
+        y: centroPixel.y - tamanho.altura / 2 - MARGEM_QUADRO_PX,
+      },
+      quadro.zoom,
+    );
+    const cantoB = pixelEmMundo(
+      {
+        x: centroPixel.x + tamanho.largura / 2 + MARGEM_QUADRO_PX,
+        y: centroPixel.y + tamanho.altura / 2 + MARGEM_QUADRO_PX,
+      },
+      quadro.zoom,
+    );
+    const noQuadro = paradasNoQuadro(paradas.paradas, {
+      latMin: Math.min(cantoA.lat, cantoB.lat),
+      latMax: Math.max(cantoA.lat, cantoB.lat),
+      lngMin: Math.min(cantoA.lng, cantoB.lng),
+      lngMax: Math.max(cantoA.lng, cantoB.lng),
+    });
+    return noQuadro.length <= MAX_PARADAS_TELA ? noQuadro : null;
+  })();
+
   return (
     <div
       ref={containerRef}
@@ -383,6 +433,53 @@ export function Mapa(props: {
           );
         })}
       </div>
+
+      {paradasVisiveis !== null && (
+        <div className="pointer-events-none absolute inset-0">
+          {paradasVisiveis.map((parada, indice) => {
+            const tela = pontoParaPixelDeTela(parada, {
+              centro: quadro,
+              zoom: quadro.zoom,
+              largura: tamanho.largura,
+              altura: tamanho.altura,
+            });
+            const selecionada = parada === paradaSelecionada;
+            return (
+              <button
+                key={`${parada.lat},${parada.lng},${indice}`}
+                type="button"
+                className={
+                  "parada-mapa group pointer-events-auto absolute m-0 flex h-0 w-0 items-center justify-center rounded-full border-0 bg-transparent p-0 cursor-pointer " +
+                  (selecionada ? "is-selecionada" : "")
+                }
+                style={{ left: `${tela.x}px`, top: `${tela.y}px` }}
+                title={
+                  parada.letreiros.length > 0
+                    ? `linhas ${parada.letreiros.join(", ")}`
+                    : "ponto de ônibus"
+                }
+                aria-label={
+                  parada.letreiros.length > 0
+                    ? `Ponto de ônibus, linhas ${parada.letreiros.join(", ")}`
+                    : "Ponto de ônibus"
+                }
+                aria-pressed={selecionada}
+                onClick={() => aoSelecionarParada(parada)}
+              >
+                <span
+                  aria-hidden="true"
+                  className={
+                    "block h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-white bg-[#79808a] shadow-[0_1px_3px_rgba(23,24,26,0.35)] transition-transform " +
+                    (selecionada
+                      ? "scale-[1.6] border-[#ffb300] bg-[#ffb300]"
+                      : "group-hover:scale-[1.5]")
+                  }
+                />
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {localizacao.estado.ponto !== null &&
         (() => {

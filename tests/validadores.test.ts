@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   MENSAGEM_LINHA_INVALIDA,
   MENSAGEM_TERMO_CURTO,
+  cpParadaValido,
   idLinhaValido,
   termoValido,
 } from "../shared/validadores.ts";
@@ -38,4 +39,17 @@ test("id de linha rejeita zero, negativo, fracionário e NaN", () => {
   assert.equal(idLinhaValido(1.5), false);
   assert.equal(idLinhaValido(Number.NaN), false);
   assert.equal(idLinhaValido(Number.POSITIVE_INFINITY), false);
+});
+
+test("cp de parada aceita inteiro positivo pequeno", () => {
+  assert.equal(cpParadaValido(1), true);
+  assert.equal(cpParadaValido(340015329), true);
+});
+
+test("cp de parada rejeita zero, negativo, fracionário e absurdos", () => {
+  assert.equal(cpParadaValido(0), false);
+  assert.equal(cpParadaValido(-5), false);
+  assert.equal(cpParadaValido(1.5), false);
+  assert.equal(cpParadaValido(Number.NaN), false);
+  assert.equal(cpParadaValido(10_000_000_000), false);
 });

@@ -1,7 +1,8 @@
-// Pipeline offline: GTFS (zip oficial) -> carga.sql para o D1.
-// Uso:
+// Pipeline offline: GTFS (zip oficial) -> carga.sql para o D1 + asset de
+// paradas para o cliente. Uso:
 //   node gtfs/pipeline.ts                       # usa mapa existente
 //   node gtfs/pipeline.ts --atualizar-mapa      # consulta Olho Vivo p/ mapear cls
+//   node gtfs/pipeline.ts --mapear-paradas      # consulta Olho Vivo p/ casar cps
 import { execSync } from "node:child_process";
 import {
   existsSync,
@@ -13,10 +14,14 @@ import {
 } from "node:fs";
 import {
   csvParaRegistros,
+  casarParadas,
   extrairCores,
   extrairRotas,
   prefixoLetreiro,
+  type ParadaOlhoVivo,
+  type Registro,
 } from "../shared/gtfs.ts";
+import { codificarParadas } from "../shared/paradas.ts";
 import type { RotaExtraida } from "../shared/gtfs.ts";
 
 const raiz = new URL("..", import.meta.url).pathname;
@@ -49,70 +54,111 @@ function lerToken(): string | null {
 
 const API_BASE = "https://api.olhovivo.sptrans.com.br/v2.1";
 
-async function consultarLinhas(
-  token: string,
-  letreiros: readonly string[],
-): Promise<Map<string, readonly EntradaMapa[]>> {
-  let cookie: string | null = null;
-
-  async function entrar(): Promise<void> {
+// O login da SPTrans recusa o token em janelas intermitentes (o mesmo token
+// entra minutos depois) — tenta com espera antes de desistir.
+async function criarSessao(token: string): Promise<string> {
+  for (let tentativa = 0; tentativa < 4; tentativa += 1) {
+    if (tentativa > 0) {
+      await new Promise((resolver) => setTimeout(resolver, 15_000));
+    }
     const resposta = await fetch(
       `${API_BASE}/Login/Autenticar?token=${encodeURIComponent(token)}`,
       { method: "POST", headers: { "content-length": "0" } },
     );
-    if (!(await resposta.text()).includes("true")) {
-      throw new Error("login na SPTrans recusou o token");
-    }
+    if (!(await resposta.text()).includes("true")) continue;
     const cabecalhos = resposta.headers as Headers & { getSetCookie?: () => string[] };
     const brutos = typeof cabecalhos.getSetCookie === "function"
       ? cabecalhos.getSetCookie()
       : [cabecalhos.get("set-cookie") ?? ""];
-    cookie = brutos[0]?.split(";")[0] ?? null;
-    if (!cookie) throw new Error("autenticação não devolveu cookie");
+    const cookie = brutos[0]?.split(";")[0] ?? null;
+    if (cookie) return cookie;
   }
+  throw new Error("login na SPTrans recusou o token mesmo com novas tentativas");
+}
+
+type ClienteSessao = {
+  readonly cookie: () => Promise<string>;
+  readonly invalidar: () => void;
+};
+
+function criarSessaoReutilizavel(token: string): ClienteSessao {
+  let atual: string | null = null;
+  return {
+    async cookie(): Promise<string> {
+      if (atual !== null) return atual;
+      atual = await criarSessao(token);
+      return atual;
+    },
+    invalidar(): void {
+      atual = null;
+    },
+  };
+}
+
+async function pedirJson(
+  sessao: ClienteSessao,
+  caminho: string,
+): Promise<unknown> {
+  for (let tentativa = 0; tentativa < 2; tentativa += 1) {
+    let cookie: string;
+    try {
+      cookie = await sessao.cookie();
+    } catch {
+      throw new Error("não foi possível autenticar na SPTrans");
+    }
+    let resposta: Response;
+    try {
+      resposta = await fetch(`${API_BASE}${caminho}`, { headers: { cookie } });
+    } catch {
+      continue;
+    }
+    if (resposta.status === 401 || resposta.status === 403) {
+      sessao.invalidar();
+      continue;
+    }
+    if (!resposta.ok) {
+      throw new Error(`a API da SPTrans respondeu HTTP ${resposta.status}`);
+    }
+    return (await resposta.json()) as unknown;
+  }
+  throw new Error("sessão expirou mesmo após nova autenticação");
+}
+
+async function consultarLinhas(
+  token: string,
+  letreiros: readonly string[],
+): Promise<Map<string, readonly EntradaMapa[]>> {
+  const sessao = criarSessaoReutilizavel(token);
 
   const mapa = new Map<string, EntradaMapa[]>();
 
   async function buscarUm(letreiro: string): Promise<void> {
-    for (let tentativa = 0; tentativa < 2; tentativa += 1) {
-      try {
-        if (!cookie) await entrar();
-      } catch {
-        throw new Error("não foi possível autenticar na SPTrans");
-      }
-      let resposta: Response;
-      try {
-        resposta = await fetch(
-          `${API_BASE}/Linha/Buscar?termosBusca=${encodeURIComponent(letreiro)}`,
-          { headers: { cookie: cookie! } },
-        );
-      } catch {
-        continue;
-      }
-      if (!resposta.ok) {
-        cookie = null;
-        continue;
-      }
-      const corpo = (await resposta.json()) as unknown;
-      if (!Array.isArray(corpo)) return;
-      for (const item of corpo) {
-        const registro = item as Record<string, unknown>;
-        if (
-          typeof registro.cl !== "number" ||
-          typeof registro.lt !== "string" ||
-          typeof registro.sl !== "number"
-        ) {
-          continue;
-        }
-        const sufixo = registro.tl === undefined ? "" : String(registro.tl);
-        const rotaId = sufixo === "" ? registro.lt : `${registro.lt}-${sufixo}`;
-        const lista = mapa.get(rotaId) ?? [];
-        if (!lista.some((entrada) => entrada.cl === registro.cl)) {
-          lista.push({ cl: registro.cl, sl: registro.sl });
-          mapa.set(rotaId, lista);
-        }
-      }
+    let corpo: unknown;
+    try {
+      corpo = await pedirJson(
+        sessao,
+        `/Linha/Buscar?termosBusca=${encodeURIComponent(letreiro)}`,
+      );
+    } catch {
       return;
+    }
+    if (!Array.isArray(corpo)) return;
+    for (const item of corpo) {
+      const registro = item as Record<string, unknown>;
+      if (
+        typeof registro.cl !== "number" ||
+        typeof registro.lt !== "string" ||
+        typeof registro.sl !== "number"
+      ) {
+        continue;
+      }
+      const sufixo = registro.tl === undefined ? "" : String(registro.tl);
+      const rotaId = sufixo === "" ? registro.lt : `${registro.lt}-${sufixo}`;
+      const lista = mapa.get(rotaId) ?? [];
+      if (!lista.some((entrada) => entrada.cl === registro.cl)) {
+        lista.push({ cl: registro.cl, sl: registro.sl });
+        mapa.set(rotaId, lista);
+      }
     }
   }
 
@@ -198,6 +244,191 @@ function emitirCoresTs(cores: Readonly<Record<string, string>>): string {
   ].join("\n");
 }
 
+type MapaParadas = { readonly feed_em: string; readonly cps: Readonly<Record<string, number>> };
+
+function letreirosPorStopDasFontes(fontes: {
+  readonly rotas: readonly Registro[];
+  readonly viagens: readonly Registro[];
+  readonly tempos: readonly Registro[];
+  readonly paradas: readonly Registro[];
+}): Map<string, Set<string>> {
+  const letreiroPorRoute = new Map(
+    fontes.rotas.map((r) => [r.route_id ?? "", prefixoLetreiro(r.route_id ?? "")]),
+  );
+  const rotaPorTrip = new Map(
+    fontes.viagens.map((v) => [v.trip_id ?? "", v.route_id ?? ""]),
+  );
+  const porStop = new Map<string, Set<string>>();
+  for (const tempo of fontes.tempos) {
+    const letreiro = letreiroPorRoute.get(rotaPorTrip.get(tempo.trip_id ?? "") ?? "");
+    if (letreiro === undefined || letreiro === "") continue;
+    const stopId = tempo.stop_id ?? "";
+    if (stopId === "") continue;
+    const lista = porStop.get(stopId);
+    if (lista === undefined) porStop.set(stopId, new Set([letreiro]));
+    else lista.add(letreiro);
+  }
+  return porStop;
+}
+
+function emitirParadas(
+  fontes: {
+    readonly paradas: readonly Registro[];
+    readonly viagens: readonly Registro[];
+    readonly rotas: readonly Registro[];
+    readonly tempos: readonly Registro[];
+  },
+  cps: Readonly<Record<string, number>>,
+): string {
+  const letreirosPorStop = letreirosPorStopDasFontes(fontes);
+  const feedEm = statSync(caminhoZip).mtime.toISOString().slice(0, 10);
+  const paradas = fontes.paradas
+    .filter((p) => p.stop_lat !== undefined && p.stop_lon !== undefined)
+    .map((p) => ({
+      lat: Number(p.stop_lat),
+      lng: Number(p.stop_lon),
+      letreiros: [...(letreirosPorStop.get(p.stop_id ?? "") ?? [])],
+      cp: cps[p.stop_id ?? ""] ?? null,
+    }))
+    .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+  const asset = codificarParadas(feedEm, paradas);
+  const corpo = JSON.stringify(asset);
+  const comCp = paradas.filter((p) => p.cp !== null).length;
+  console.log(
+    `Paradas no asset: ${paradas.length} · com cp: ${comCp} · ${(corpo.length / 1024).toFixed(0)} KB`,
+  );
+  // Módulo TS (não JSON em client/: a capsule não serve estáticos) — mesmo
+  // padrão de shared/cores.ts.
+  return [
+    "// GERADO por gtfs/pipeline.ts a partir do stops.txt do GTFS — não editar à mão.",
+    'import type { AssetParadas } from "../shared/paradas.ts";',
+    "",
+    `export const ASSET_PARADAS: AssetParadas = ${corpo};`,
+    "",
+  ].join("\n");
+}
+
+// Casar stop_id (GTFS) com cp (Olho Vivo): varre BuscarParadasPorLinha por
+// todos os cl do mapa-cl e aproxima por distância + letreiro. Um request por
+// cl, uma vez a cada feed novo — o resultado vira gtfs/mapa-paradas.json.
+async function mapearCps(
+  token: string,
+  fontes: {
+    readonly paradas: readonly Registro[];
+    readonly viagens: readonly Registro[];
+    readonly rotas: readonly Registro[];
+    readonly tempos: readonly Registro[];
+  },
+): Promise<MapaParadas> {
+  const mapaCl = JSON.parse(readFileSync(caminhoMapa, "utf8")) as MapaCl;
+  const letreiroPorRota = new Map<string, Set<string>>();
+  const clPorLetreiros = new Map<number, Set<string>>();
+  for (const [rotaId, entradas] of Object.entries(mapaCl.linhas)) {
+    const letreiro = prefixoLetreiro(rotaId);
+    if (letreiro === "") continue;
+    for (const entrada of entradas) {
+      const atual = clPorLetreiros.get(entrada.cl) ?? new Set<string>();
+      atual.add(letreiro);
+      clPorLetreiros.set(entrada.cl, atual);
+      const rotasDoLetreiro = letreiroPorRota.get(letreiro) ?? new Set<string>();
+      rotasDoLetreiro.add(rotaId);
+      letreiroPorRota.set(letreiro, rotasDoLetreiro);
+    }
+  }
+  const letreirosPorStop = letreirosPorStopDasFontes(fontes);
+  const paradasGtfs = new Map(
+    fontes.paradas
+      .filter((p) => p.stop_lat !== undefined && p.stop_lon !== undefined)
+      .map((p) => [
+        p.stop_id ?? "",
+        {
+          lat: Number(p.stop_lat),
+          lng: Number(p.stop_lon),
+          letreiros: letreirosPorStop.get(p.stop_id ?? "") ?? new Set<string>(),
+        },
+      ]),
+  );
+
+  const cls = [...clPorLetreiros.keys()];
+  console.log(`Casando cps: ${cls.length} cl + corredores…`);
+  const sessao = criarSessaoReutilizavel(token);
+  const cps = new Map<string, number>();
+
+  // Fonte 1: paradas por linha (troncos de corredor). Fonte 2: todos os
+  // corredores oficiais, sem restrição de letreiro — /Corredor cobre pontos
+  // que nenhuma linha mapeada devolve (ex.: Parelheiros).
+  const consultas: {
+    readonly caminho: string;
+    readonly letreiros: ReadonlySet<string>;
+  }[] = cls.map((cl) => ({
+    caminho: `/Parada/BuscarParadasPorLinha?codigoLinha=${cl}`,
+    letreiros: clPorLetreiros.get(cl) ?? new Set<string>(),
+  }));
+  try {
+    const corredores = await pedirJson(sessao, "/Corredor");
+    if (Array.isArray(corredores)) {
+      for (const corredor of corredores) {
+        const cc = (corredor as Record<string, unknown>).cc;
+        if (typeof cc !== "number") continue;
+        consultas.push({
+          caminho: `/Parada/BuscarParadasPorCorredor?codigoCorredor=${cc}`,
+          letreiros: new Set<string>(),
+        });
+      }
+    }
+  } catch (erro) {
+    console.log(`  corredores: ${erro instanceof Error ? erro.message : "erro"}`);
+  }
+
+  const fila = [...consultas];
+  let feitas = 0;
+  async function trabalhadora(): Promise<void> {
+    while (fila.length > 0) {
+      const consulta = fila.shift();
+      if (consulta === undefined) return;
+      let paradasLinha: ParadaOlhoVivo[] = [];
+      try {
+        const corpo = await pedirJson(sessao, consulta.caminho);
+        if (Array.isArray(corpo)) {
+          paradasLinha = corpo.flatMap((item) => {
+            const registro = item as Record<string, unknown>;
+            if (
+              typeof registro.cp !== "number" ||
+              typeof registro.np !== "string" ||
+              typeof registro.py !== "number" ||
+              typeof registro.px !== "number"
+            ) {
+              return [];
+            }
+            return [{ cp: registro.cp, nome: registro.np, lat: registro.py, lng: registro.px }];
+          });
+        }
+      } catch (erro) {
+        console.log(`  ${consulta.caminho}: ${erro instanceof Error ? erro.message : "erro"}`);
+      }
+      for (const [stopId, cp] of casarParadas({
+        paradasGtfs,
+        paradasOlhoVivo: paradasLinha,
+        letreiros: consulta.letreiros,
+      })) {
+        cps.set(stopId, cp);
+      }
+      feitas += 1;
+      if (feitas % 200 === 0) console.log(`  paradas: ${feitas}/${consultas.length} consultas · ${cps.size} cps`);
+    }
+  }
+  await Promise.all(Array.from({ length: 4 }, trabalhadora));
+
+  const feedEm = statSync(caminhoZip).mtime.toISOString().slice(0, 10);
+  const mapa: MapaParadas = { feed_em: feedEm, cps: Object.fromEntries(cps) };
+  writeFileSync(
+    `${raiz}gtfs/mapa-paradas.json`,
+    JSON.stringify(mapa),
+  );
+  console.log(`cps casados: ${cps.size} -> gtfs/mapa-paradas.json`);
+  return mapa;
+}
+
 const tmp = "/tmp/busao-gtfs-carga";
 rmSync(tmp, { recursive: true, force: true });
 mkdirSync(tmp, { recursive: true });
@@ -235,3 +466,21 @@ if (atualizarMapa || mapa === null) {
 
 writeFileSync(`${raiz}gtfs/carga.sql`, emitirSql(rotas, mapa));
 console.log(`SQL gerado em gtfs/carga.sql`);
+
+const mapearParadas = process.argv.includes("--mapear-paradas");
+let cps: Readonly<Record<string, number>> = {};
+const caminhoMapaParadas = `${raiz}gtfs/mapa-paradas.json`;
+if (mapearParadas) {
+  const token = lerToken();
+  if (token === null) {
+    console.error("--mapear-paradas precisa de OLHOVIVO_TOKEN (ou .env.lakebed.server).");
+    process.exit(1);
+  }
+  const mapaParadas = await mapearCps(token, fontes);
+  cps = mapaParadas.cps;
+} else if (existsSync(caminhoMapaParadas)) {
+  cps = (JSON.parse(readFileSync(caminhoMapaParadas, "utf8")) as MapaParadas).cps;
+  console.log(`cps carregados de gtfs/mapa-paradas.json: ${Object.keys(cps).length}`);
+}
+writeFileSync(`${raiz}client/paradas-dados.ts`, emitirParadas(fontes, cps));
+console.log(`Asset de paradas em client/paradas-dados.ts`);

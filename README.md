@@ -4,6 +4,9 @@ Site minimalista para acompanhar em tempo real onde estão os ônibus das linhas
 
 - Busca de linhas por **número** (`8000`, `N106`) ou **nome** (`Paulista`)
 - Posições dos ônibus em **mapa ao vivo** (atualização a cada 10 s)
+- **Pontos de ônibus** como ícones discretos a partir do zoom 15: ao tocar,
+  painel com as linhas que passam e previsão de chegada — hoje só para os
+  pontos de corredor (limitação da API da SPTrans)
 - Trajeto completo da linha desenhado pela geometria oficial do GeoSampa
 - Círculo do ônibus na **cor oficial da linha** (GTFS da SPTrans, gerado em
   `shared/cores.ts`); sem cor no feed, cai na paleta da área operacional de
@@ -44,7 +47,24 @@ Chaves recém-criadas podem levar alguns dias para ativar no servidor da SPTrans
 enquanto isso as buscas retornam a mensagem “a SPTrans ainda não ativou essa
 chave”. O servidor faz login automaticamente e reutiliza a sessão (cookie)
 persistida no banco da capsule; posições repetidas dentro de 7 s são servidas de
-cache em memória.
+cache em memória. O login intermitentemente recusa o token em janelas curtas —
+o pipeline de GTFS faz novas tentativas ao mapear paradas.
+
+### Pontos de ônibus (GTFS offline)
+
+O asset de paradas (`client/paradas-dados.ts`) e o quadro de horários são
+gerados do GTFS de `gtfs/cittamobi_gtfs.zip`:
+
+```sh
+node gtfs/pipeline.ts                     # regenera asset + carga.sql
+node gtfs/pipeline.ts --mapear-paradas    # + casa stop_id GTFS → cp Olho Vivo
+```
+
+O pareamento de `cp` (usado pela previsão de chegada) consulta a API por linha
+e por corredor e casa por proximidade — a SPTrans só expõe previsão para
+pontos de corredor, então só esses recebem `cp` no asset. Sem o arquivo
+`gtfs/mapa-paradas.json` o app funciona: o painel mostra só as linhas do
+ponto. O asset fica no bundle (a capsule não serve estáticos de `client/`).
 
 ### Worktrees (`git worktree`)
 

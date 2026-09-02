@@ -1,97 +1,95 @@
-import type { PosicoesDaLinha } from "../shared/tipos.ts";
-
-export type EntradaCache = {
-  readonly dados: PosicoesDaLinha;
+export type EntradaCache<T> = {
+  readonly dados: T;
   readonly expiraEm: number;
 };
 
-export type ArmazenamentoCache = {
-  readonly ler: (linhaId: number) => Promise<EntradaCache | null>;
-  readonly gravar: (linhaId: number, entrada: EntradaCache) => Promise<void>;
+export type ArmazenamentoCache<T> = {
+  readonly ler: (chave: number) => Promise<EntradaCache<T> | null>;
+  readonly gravar: (chave: number, entrada: EntradaCache<T>) => Promise<void>;
 };
 
 const TTL_PADRAO_MS = 7_000;
 
-export function criarCachePosicoes(opcoes: {
-  readonly buscar: (linhaId: number) => Promise<PosicoesDaLinha>;
+export function criarCachePosicoes<T>(opcoes: {
+  readonly buscar: (chave: number) => Promise<T>;
   readonly agora?: () => number;
   readonly ttlMs?: number;
-  readonly aoRegistrar?: (linhaId: number, resultado: "hit" | "miss") => void;
-  readonly armazenamento?: ArmazenamentoCache;
+  readonly aoRegistrar?: (chave: number, resultado: "hit" | "miss") => void;
+  readonly armazenamento?: ArmazenamentoCache<T>;
 }): {
-  readonly obter: (linhaId: number) => Promise<PosicoesDaLinha>;
+  readonly obter: (chave: number) => Promise<T>;
   readonly tamanho: () => number;
 } {
   const agora = opcoes.agora ?? Date.now;
   const ttlMs = opcoes.ttlMs ?? TTL_PADRAO_MS;
   const armazenamento = opcoes.armazenamento;
-  const entradasMemoria = new Map<number, EntradaCache>();
-  const emVoo = new Map<number, Promise<PosicoesDaLinha>>();
+  const entradasMemoria = new Map<number, EntradaCache<T>>();
+  const emVoo = new Map<number, Promise<T>>();
 
   function removerExpiradasMemoria(): void {
     const instante = agora();
-    for (const [linhaId, entrada] of entradasMemoria) {
-      if (entrada.expiraEm <= instante) entradasMemoria.delete(linhaId);
+    for (const [chave, entrada] of entradasMemoria) {
+      if (entrada.expiraEm <= instante) entradasMemoria.delete(chave);
     }
   }
 
-  function registrar(linhaId: number, resultado: "hit" | "miss"): void {
-    opcoes.aoRegistrar?.(linhaId, resultado);
+  function registrar(chave: number, resultado: "hit" | "miss"): void {
+    opcoes.aoRegistrar?.(chave, resultado);
   }
 
   function iniciarBusca(
-    linhaId: number,
-    executar: () => Promise<PosicoesDaLinha>,
-  ): Promise<PosicoesDaLinha> {
+    chave: number,
+    executar: () => Promise<T>,
+  ): Promise<T> {
     const busca = executar();
     const limpar = (): void => {
-      emVoo.delete(linhaId);
+      emVoo.delete(chave);
     };
     busca.then(limpar, limpar);
-    emVoo.set(linhaId, busca);
+    emVoo.set(chave, busca);
     return busca;
   }
 
-  function obterDeMemoria(linhaId: number): Promise<PosicoesDaLinha> {
-    const fresca = entradasMemoria.get(linhaId);
+  function obterDeMemoria(chave: number): Promise<T> {
+    const fresca = entradasMemoria.get(chave);
     if (fresca !== undefined && fresca.expiraEm > agora()) {
-      registrar(linhaId, "hit");
+      registrar(chave, "hit");
       return Promise.resolve(fresca.dados);
     }
-    registrar(linhaId, "miss");
+    registrar(chave, "miss");
     return iniciarBusca(
-      linhaId,
+      chave,
       () =>
         opcoes
-          .buscar(linhaId)
+          .buscar(chave)
           .then((dados) => {
             removerExpiradasMemoria();
-            entradasMemoria.set(linhaId, {
+            entradasMemoria.set(chave, {
               dados,
               expiraEm: agora() + ttlMs,
             });
             return dados;
           })
           .finally(() => {
-            emVoo.delete(linhaId);
+            emVoo.delete(chave);
           }),
     );
   }
 
-  function obterDeArmazenamento(linhaId: number): Promise<PosicoesDaLinha> {
-    return iniciarBusca(linhaId, async () => {
+  function obterDeArmazenamento(chave: number): Promise<T> {
+    return iniciarBusca(chave, async () => {
       const armazenamentoDefinido = armazenamento;
       if (armazenamentoDefinido === undefined) {
         throw new Error("inacessível");
       }
-      const fresca = await armazenamentoDefinido.ler(linhaId);
+      const fresca = await armazenamentoDefinido.ler(chave);
       if (fresca !== null && fresca.expiraEm > agora()) {
-        registrar(linhaId, "hit");
+        registrar(chave, "hit");
         return fresca.dados;
       }
-      registrar(linhaId, "miss");
-      const dados = await opcoes.buscar(linhaId);
-      await armazenamentoDefinido.gravar(linhaId, {
+      registrar(chave, "miss");
+      const dados = await opcoes.buscar(chave);
+      await armazenamentoDefinido.gravar(chave, {
         dados,
         expiraEm: agora() + ttlMs,
       });
@@ -100,15 +98,15 @@ export function criarCachePosicoes(opcoes: {
   }
 
   return {
-    obter(linhaId: number): Promise<PosicoesDaLinha> {
-      const andamento = emVoo.get(linhaId);
+    obter(chave: number): Promise<T> {
+      const andamento = emVoo.get(chave);
       if (andamento !== undefined) {
-        registrar(linhaId, "hit");
+        registrar(chave, "hit");
         return andamento;
       }
       return armazenamento === undefined
-        ? obterDeMemoria(linhaId)
-        : obterDeArmazenamento(linhaId);
+        ? obterDeMemoria(chave)
+        : obterDeArmazenamento(chave);
     },
 
     tamanho(): number {

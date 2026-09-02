@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  casarParadas,
   csvParaRegistros,
+  distanciaMetros,
   expandirJanela,
   extrairCores,
   extrairRotas,
@@ -144,4 +146,70 @@ test("extrairCores: primeira variante vence quando variantes divergem", () => {
     'route_id,route_color\n"3063-10","DA291C"\n"3063-11","FFD100"',
   );
   assert.deepEqual(extrairCores(registros), { "3063": "#DA291C" });
+});
+
+test("distanciaMetros mede curta distância com precisão de rua", () => {
+  // Av. Paulista 1000 → 1400 (~200 m ao longo da avenida)
+  const metros = distanciaMetros(
+    { lat: -23.561414, lng: -46.655881 },
+    { lat: -23.561414, lng: -46.653571 },
+  );
+  assert.ok(metros > 220 && metros < 250, `esperava ~235 m, veio ${metros}`);
+  assert.equal(distanciaMetros({ lat: -23.5, lng: -46.6 }, { lat: -23.5, lng: -46.6 }), 0);
+});
+
+test("casarParadas casa por proximidade e letreiro da linha", () => {
+  const paradasGtfs = new Map([
+    ["1", { lat: -23.5500, lng: -46.6400, letreiros: new Set(["8000"]) }],
+    ["2", { lat: -23.5501, lng: -46.6401, letreiros: new Set(["N106"]) }],
+    ["3", { lat: -23.9000, lng: -46.9000, letreiros: new Set(["8000"]) }],
+  ]);
+  const pares = casarParadas({
+    paradasGtfs,
+    paradasOlhoVivo: [
+      { cp: 111, nome: "A", lat: -23.55002, lng: -46.64002 },
+      { cp: 222, nome: "B", lat: -23.9001, lng: -46.9001 },
+    ],
+    letreiros: new Set(["8000"]),
+  });
+  // cp 111 casa com a parada 1 (perto e com o letreiro); a 2 é mais perto
+  // ainda, mas só tem N106 — fora do letreiro consultado. cp 222 casa com a 3.
+  assert.deepEqual(pares, [["1", 111], ["3", 222]]);
+});
+
+test("casarParadas: cada lado recebe no máximo um par", () => {
+  const paradasGtfs = new Map([
+    ["1", { lat: -23.55, lng: -46.64, letreiros: new Set(["8000"]) }],
+    ["2", { lat: -23.5501, lng: -46.6401, letreiros: new Set(["8000"]) }],
+  ]);
+  const pares = casarParadas({
+    paradasGtfs,
+    paradasOlhoVivo: [
+      { cp: 111, nome: "A", lat: -23.55, lng: -46.64 },
+      { cp: 222, nome: "B", lat: -23.55002, lng: -46.64002 },
+    ],
+    letreiros: new Set(["8000"]),
+  });
+  assert.equal(pares.length, 2);
+  const stopIds = pares.map(([stopId]) => stopId);
+  const cps = pares.map(([, cp]) => cp);
+  assert.equal(new Set(stopIds).size, 2);
+  assert.equal(new Set(cps).size, 2);
+  // o par mais próximo (cp 111 → parada 1, a 0 m) vence o ganancioso; o
+  // cp 222, que preferia a mesma parada, cai na segunda mais próxima.
+  assert.deepEqual(pares[0], ["1", 111]);
+  assert.deepEqual(pares[1], ["2", 222]);
+});
+
+test("casarParadas ignora paradas além do limiar", () => {
+  const paradasGtfs = new Map([
+    ["1", { lat: -23.55, lng: -46.64, letreiros: new Set(["8000"]) }],
+  ]);
+  const pares = casarParadas({
+    paradasGtfs,
+    paradasOlhoVivo: [{ cp: 111, nome: "A", lat: -23.552, lng: -46.64 }],
+    letreiros: new Set(["8000"]),
+    limiteMetros: 80,
+  });
+  assert.deepEqual(pares, []);
 });

@@ -3,11 +3,13 @@ import {
   ehLinha,
   ehStatus,
   paraPosicoesDoCliente,
+  paraPrevisaoDoCliente,
   paraRotaDoCliente,
 } from "../shared/parsers.ts";
 import type {
   Linha,
   PosicoesDaLinha,
+  PrevisaoParada,
   RotaDaLinha,
   StatusApi,
 } from "../shared/tipos.ts";
@@ -78,6 +80,20 @@ export const api = {
     const dados = paraRotaDoCliente(corpo);
     if (dados === null) {
       throw new ErroApi("resposta de trajeto inválida");
+    }
+    return dados;
+  },
+
+  async previsao(
+    codigoParada: number,
+    opcoes: { readonly sinal?: AbortSignal } = {},
+  ): Promise<PrevisaoParada> {
+    const init =
+      opcoes.sinal !== undefined ? { signal: opcoes.sinal } : undefined;
+    const corpo = await obterCorpo(`/api/previsao?parada=${codigoParada}`, init);
+    const dados = paraPrevisaoDoCliente(corpo);
+    if (dados === null) {
+      throw new ErroApi("resposta de previsão inválida");
     }
     return dados;
   },

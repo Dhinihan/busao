@@ -255,3 +255,94 @@ export function extrairCores(
   }
   return cores;
 }
+
+export type ParadaOlhoVivo = {
+  readonly cp: number;
+  readonly nome: string;
+  readonly lat: number;
+  readonly lng: number;
+};
+
+const RAIO_TERRA_M = 6_371_000;
+
+// Equiretangular local — erro desprezível para limiares de bairros.
+export function distanciaMetros(
+  a: { readonly lat: number; readonly lng: number },
+  b: { readonly lat: number; readonly lng: number },
+): number {
+  const radiano = Math.PI / 180;
+  const y = (b.lat - a.lat) * radiano;
+  const x = (b.lng - a.lng) * radiano * Math.cos(((a.lat + b.lat) / 2) * radiano);
+  return Math.sqrt(x * x + y * y) * RAIO_TERRA_M;
+}
+
+// Casamento offline stop_id (GTFS) → cp (Olho Vivo): os IDs não coincidem
+// entre os sistemas. Para cada parada do Olho Vivo, casa com a parada GTFS
+// mais próxima; com letreiros não vazio, a parada GTFS precisa carregar um
+// dos letreiros da linha consultada. Ganancioso por distância crescente,
+// cada lado no máximo um par. Grade espacial evita comparar tudo contra tudo.
+export function casarParadas(opcoes: {
+  readonly paradasGtfs: ReadonlyMap<
+    string,
+    { readonly lat: number; readonly lng: number; readonly letreiros: ReadonlySet<string> }
+  >;
+  readonly paradasOlhoVivo: readonly ParadaOlhoVivo[];
+  readonly letreiros: ReadonlySet<string>;
+  readonly limiteMetros?: number;
+}): readonly (readonly [string, number])[] {
+  const limite = opcoes.limiteMetros ?? 80;
+  const CELULA_GRAU = 0.001; // ~111 m — vizinhança 3×3 cobre o limiar
+  const celula = (lat: number, lng: number): string =>
+    `${Math.floor(lat / CELULA_GRAU)},${Math.floor(lng / CELULA_GRAU)}`;
+  const grade = new Map<string, string[]>();
+  for (const [stopId, parada] of opcoes.paradasGtfs) {
+    const chave = celula(parada.lat, parada.lng);
+    const lista = grade.get(chave);
+    if (lista === undefined) grade.set(chave, [stopId]);
+    else lista.push(stopId);
+  }
+
+  const candidatos: {
+    readonly stopId: string;
+    readonly cp: number;
+    readonly metros: number;
+  }[] = [];
+  for (const ov of opcoes.paradasOlhoVivo) {
+    const gx = Math.floor(ov.lat / CELULA_GRAU);
+    const gy = Math.floor(ov.lng / CELULA_GRAU);
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const lista = grade.get(`${gx + dx},${gy + dy}`);
+        if (lista === undefined) continue;
+        for (const stopId of lista) {
+          const parada = opcoes.paradasGtfs.get(stopId);
+          if (parada === undefined) continue;
+          const semRestricao = opcoes.letreiros.size === 0;
+          let temLetreiro = semRestricao;
+          for (const letreiro of parada.letreiros) {
+            if (opcoes.letreiros.has(letreiro)) {
+              temLetreiro = true;
+              break;
+            }
+          }
+          if (!temLetreiro) continue;
+          const metros = distanciaMetros(ov, parada);
+          if (metros <= limite) {
+            candidatos.push({ stopId, cp: ov.cp, metros });
+          }
+        }
+      }
+    }
+  }
+  candidatos.sort((a, b) => a.metros - b.metros);
+  const casadosGtfs = new Set<string>();
+  const casadosCp = new Set<number>();
+  const pares: (readonly [string, number])[] = [];
+  for (const candidato of candidatos) {
+    if (casadosGtfs.has(candidato.stopId) || casadosCp.has(candidato.cp)) continue;
+    casadosGtfs.add(candidato.stopId);
+    casadosCp.add(candidato.cp);
+    pares.push([candidato.stopId, candidato.cp]);
+  }
+  return pares;
+}
