@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { gzipSync } from "node:zlib";
 import {
   codificarParadas,
   decodificarParadas,
+  decodificarParadasGzip,
   paradasNoQuadro,
 } from "../shared/paradas.ts";
 
@@ -62,8 +64,7 @@ test("decodificador rejeita asset malformado", () => {
   );
 });
 
-test("paradasNoQuadro filtra pelo retângulo", () => {
-  const decodificadas = decodificarParadas(codificarParadas("2026-08-24", PARADAS))!;
+test("paradasNoQuadro filtra pelo retângulo", () => {  const decodificadas = decodificarParadas(codificarParadas("2026-08-24", PARADAS))!;
   const centro = decodificadas[2]!;
   const noQuadro = paradasNoQuadro(decodificadas, {
     latMin: centro.lat - 0.001,
@@ -73,4 +74,20 @@ test("paradasNoQuadro filtra pelo retângulo", () => {
   });
   assert.equal(noQuadro.length, 1);
   assert.equal(noQuadro[0]!.cp, 340015329);
+});
+
+test("decodificarParadasGzip faz o ciclo gzip→base64→paradas", async () => {
+  const asset = codificarParadas("2026-08-24", PARADAS);
+  const base64 = gzipSync(Buffer.from(JSON.stringify(asset)), { level: 9 }).toString("base64");
+  const decodificadas = await decodificarParadasGzip(base64);
+  assert.notEqual(decodificadas, null);
+  assert.equal(decodificadas!.length, 3);
+  assert.equal(decodificadas![2]!.cp, 340015329);
+  assert.deepEqual([...decodificadas![1]!.letreiros], ["8000", "N106"]);
+});
+
+test("decodificarParadasGzip devolve null para payload corrompido", async () => {
+  assert.equal(await decodificarParadasGzip("!!!não-é-base64!!!"), null);
+  const mentira = Buffer.from("isso não é gzip").toString("base64");
+  assert.equal(await decodificarParadasGzip(mentira), null);
 });

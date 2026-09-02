@@ -22,6 +22,7 @@ import {
   type Registro,
 } from "../shared/gtfs.ts";
 import { codificarParadas } from "../shared/paradas.ts";
+import { gzipSync } from "node:zlib";
 import type { RotaExtraida } from "../shared/gtfs.ts";
 
 const raiz = new URL("..", import.meta.url).pathname;
@@ -293,17 +294,20 @@ function emitirParadas(
     .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
   const asset = codificarParadas(feedEm, paradas);
   const corpo = JSON.stringify(asset);
+  const comprimido = gzipSync(Buffer.from(corpo), { level: 9 }).toString("base64");
   const comCp = paradas.filter((p) => p.cp !== null).length;
   console.log(
-    `Paradas no asset: ${paradas.length} · com cp: ${comCp} · ${(corpo.length / 1024).toFixed(0)} KB`,
+    `Paradas no asset: ${paradas.length} · com cp: ${comCp} · json ${(corpo.length / 1024).toFixed(0)} KB · gzip base64 ${(comprimido.length / 1024).toFixed(0)} KB`,
   );
   // Módulo TS (não JSON em client/: a capsule não serve estáticos) — mesmo
-  // padrão de shared/cores.ts.
+  // padrão de shared/cores.ts. Payload gzipado + base64 para caber no limite
+  // de 1 MB do artifact; o cliente descomprime com DecompressionStream.
   return [
     "// GERADO por gtfs/pipeline.ts a partir do stops.txt do GTFS — não editar à mão.",
-    'import type { AssetParadas } from "../shared/paradas.ts";',
+    "// String base64 de gzip(JSON do asset); decodifique com decodificarParadasGzip().",
     "",
-    `export const ASSET_PARADAS: AssetParadas = ${corpo};`,
+    `export const ASSET_PARADAS_GZIP: string =`,
+    `  "${comprimido}";`,
     "",
   ].join("\n");
 }

@@ -94,6 +94,28 @@ function textoBase36(valor: unknown): number | null {
   return Number.isFinite(numero) ? numero : null;
 }
 
+// O asset embarcado no bundle vai comprimido (gzip) para caber folgado no
+// limite de 1 MB do artifact da capsule. A descompressão usa APIs padrão da
+// plataforma (atob + DecompressionStream, presentes em navegadores atuais e
+// no Node dos testes) e o resultado passa pelo mesmo decodificador puro —
+// a validação do payload não muda. Requer Safari 16.4+ / Chrome 80+ / FF 113+.
+export async function decodificarParadasGzip(
+  base64: string,
+): Promise<readonly Parada[] | null> {
+  try {
+    const binario = atob(base64);
+    const bytes = new Uint8Array(binario.length);
+    for (let i = 0; i < binario.length; i += 1) bytes[i] = binario.charCodeAt(i);
+    const fluxo = new Blob([bytes])
+      .stream()
+      .pipeThrough(new DecompressionStream("gzip"));
+    const texto = await new Response(fluxo).text();
+    return decodificarParadas(JSON.parse(texto));
+  } catch {
+    return null;
+  }
+}
+
 export function decodificarParadas(bruto: unknown): readonly Parada[] | null {
   if (typeof bruto !== "object" || bruto === null) return null;
   if (!("letreiros" in bruto) || !Array.isArray(bruto.letreiros)) return null;
