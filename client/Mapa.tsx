@@ -272,6 +272,7 @@ export function Mapa(props: {
       : [];
 
   const paradas = useParadas(quadro.zoom >= ZOOM_PARADAS);
+  const raioPonto = quadro.zoom >= 17 ? 10 : 8;
   const paradasVisiveis = (() => {
     if (
       paradas.paradas === null ||
@@ -448,11 +449,8 @@ export function Mapa(props: {
               <button
                 key={`${parada.lat},${parada.lng},${indice}`}
                 type="button"
-                className={
-                  "parada-mapa group pointer-events-auto absolute m-0 flex h-0 w-0 items-center justify-center rounded-full border-0 bg-transparent p-0 cursor-pointer " +
-                  (selecionada ? "is-selecionada" : "")
-                }
-                style={{ left: `${tela.x}px`, top: `${tela.y}px` }}
+                className="parada-mapa group pointer-events-auto absolute m-0 flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0"
+                style={{ left: `${tela.x - 15}px`, top: `${tela.y - 15}px` }}
                 title={
                   parada.letreiros.length > 0
                     ? `linhas ${parada.letreiros.join(", ")}`
@@ -469,16 +467,27 @@ export function Mapa(props: {
                 <span
                   aria-hidden="true"
                   className={
-                    "block h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-white bg-[#79808a] shadow-[0_1px_3px_rgba(23,24,26,0.35)] transition-transform " +
+                    "block rounded-full border-white shadow-[0_1px_4px_rgba(23,24,26,0.5)] transition-transform " +
                     (selecionada
-                      ? "scale-[1.6] border-[#ffb300] bg-[#ffb300]"
-                      : "group-hover:scale-[1.5]")
+                      ? "h-[13px] w-[13px] border-2 border-[#ffb300] bg-[#ffb300]"
+                      : raioPonto === 10
+                        ? "h-[10px] w-[10px] border-[1.5px] bg-[#565d68] group-hover:scale-125"
+                        : "h-[8px] w-[8px] border-[1.5px] bg-[#565d68] group-hover:scale-125")
                   }
                 />
               </button>
             );
           })}
         </div>
+      )}
+
+      {paradas.erro !== null && (
+        <p
+          role="status"
+          className="pill-ciclo absolute bottom-9 left-1/2 z-10 m-0 max-w-[86%] -translate-x-1/2 whitespace-nowrap rounded-full bg-neutral-900/95 px-4 py-1.5 text-center font-mono text-xs text-amber-300 shadow-[0_6px_24px_rgba(23,24,26,0.35)]"
+        >
+          {paradas.erro}
+        </p>
       )}
 
       {localizacao.estado.ponto !== null &&

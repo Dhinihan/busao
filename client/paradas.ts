@@ -11,11 +11,20 @@ let decodificadas: Promise<readonly Parada[]> | null = null;
 
 function carregar(): Promise<readonly Parada[]> {
   if (decodificadas !== null) return decodificadas;
+  if (typeof DecompressionStream === "undefined") {
+    return Promise.reject(new ErroSemSuporte());
+  }
   decodificadas = decodificarParadasGzip(ASSET_PARADAS_GZIP).then((paradas) => {
     if (paradas === null) throw new Error("asset de paradas inválido");
     return paradas;
   });
   return decodificadas;
+}
+
+export class ErroSemSuporte extends Error {
+  constructor() {
+    super("sem DecompressionStream");
+  }
 }
 
 export type EstadoParadas = {
@@ -34,11 +43,14 @@ export function useParadas(quer: boolean): EstadoParadas {
       .then((paradas) => {
         if (!cancelado) setEstado({ paradas, erro: null });
       })
-      .catch(() => {
+      .catch((erro: unknown) => {
         if (!cancelado) {
           setEstado({
             paradas: null,
-            erro: "pontos de ônibus indisponíveis agora",
+            erro:
+              erro instanceof ErroSemSuporte
+                ? "seu navegador é antigo demais para os pontos — atualize-o"
+                : "pontos de ônibus indisponíveis agora",
           });
         }
       });
