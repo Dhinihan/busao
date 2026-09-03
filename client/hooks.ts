@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { api, ErroApi } from "./api.ts";
 import { ehLinha } from "../shared/parsers.ts";
 import type { Linha, PosicoesDaLinha, RotaDaLinha, Sentido } from "../shared/tipos.ts";
@@ -10,6 +10,70 @@ export function useValorPostergado<T>(valor: T, atrasoMs: number): T {
     return () => window.clearTimeout(timer);
   }, [valor, atrasoMs]);
   return postergado;
+}
+
+const SELETOR_FOCavel =
+  "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])";
+
+// Diálogo aria-modal completo: foco entra na abertura, Tab/Shift+Tab
+// circulam só pelos controles do diálogo (focus trap) e o foco volta ao
+// elemento que abriu o painel.
+export function useDialogoModal(): {
+  readonly secaoRef: (elemento: HTMLElement | null) => void;
+} {
+  const secaoRef = useRef<HTMLElement | null>(null);
+  const focoAnteriorRef = useRef<Element | null>(null);
+
+  useEffect(() => {
+    focoAnteriorRef.current = document.activeElement;
+    secaoRef.current?.focus();
+
+    function aoTeclarTab(evento: KeyboardEvent): void {
+      if (evento.key !== "Tab") return;
+      const secao = secaoRef.current;
+      if (secao === null) return;
+      const ativo = document.activeElement;
+      if (ativo !== null && !secao.contains(ativo)) {
+        // foco escapou do diálogo: traz de volta
+        evento.preventDefault();
+        secao.focus();
+        return;
+      }
+      const focaveis = [
+        ...secao.querySelectorAll<HTMLElement>(SELETOR_FOCavel),
+      ].filter((el) => !el.hasAttribute("disabled") && el.offsetParent !== null);
+      if (focaveis.length === 0) {
+        evento.preventDefault();
+        secao.focus();
+        return;
+      }
+      const primeiro = focaveis[0]!;
+      const ultimo = focaveis[focaveis.length - 1]!;
+      if (evento.shiftKey && (ativo === primeiro || ativo === secao)) {
+        evento.preventDefault();
+        ultimo.focus();
+        return;
+      }
+      if (!evento.shiftKey && ativo === ultimo) {
+        evento.preventDefault();
+        primeiro.focus();
+      }
+    }
+
+    window.addEventListener("keydown", aoTeclarTab, true);
+    return () => {
+      window.removeEventListener("keydown", aoTeclarTab, true);
+      if (focoAnteriorRef.current instanceof HTMLElement) {
+        focoAnteriorRef.current.focus();
+      }
+    };
+  }, []);
+
+  return {
+    secaoRef: (elemento: HTMLElement | null) => {
+      secaoRef.current = elemento;
+    },
+  };
 }
 
 const CHAVE_FAVORITAS = "busao:favoritas";

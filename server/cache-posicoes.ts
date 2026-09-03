@@ -62,16 +62,30 @@ export function criarCachePosicoes<T>(opcoes: {
     opcoes.aoRegistrar?.(chave, resultado);
   }
 
+  // Posse da busca: só a geração vigente pode escrever no cache e limpar a
+  // entrada em voo. Uma busca antiga que resolve tarde (fetch preso que
+  // volta depois de outra busca assumir) tem o resultado descartado.
+  const geracoes = new Map<number, number>();
+
   function iniciarBusca(
     chave: number,
-    executar: () => Promise<T>,
+    executar: (vigente: () => boolean) => Promise<T>,
   ): Promise<T> {
-    const busca = executar();
+    const minha = (geracoes.get(chave) ?? 0) + 1;
+    geracoes.set(chave, minha);
+    const vigente = (): boolean => geracoes.get(chave) === minha;
+    const busca = executar(vigente);
     const limpar = (): void => {
       const atual = emVoo.get(chave);
       if (atual !== undefined && atual.busca === busca) emVoo.delete(chave);
     };
-    busca.then(limpar, limpar);
+    busca.then(
+      (dados) => {
+        if (vigente()) guardar(chave, dados);
+        limpar();
+      },
+      limpar,
+    );
     emVoo.set(chave, { busca, iniciadoEm: agora() });
     return busca;
   }
@@ -83,23 +97,11 @@ export function criarCachePosicoes<T>(opcoes: {
       return Promise.resolve(fresca.dados);
     }
     registrar(chave, "miss");
-    return iniciarBusca(
-      chave,
-      () =>
-        opcoes
-          .buscar(chave)
-          .then((dados) => {
-            guardar(chave, dados);
-            return dados;
-          })
-          .finally(() => {
-            emVoo.delete(chave);
-          }),
-    );
+    return iniciarBusca(chave, () => opcoes.buscar(chave));
   }
 
   function obterDeArmazenamento(chave: number): Promise<T> {
-    return iniciarBusca(chave, async () => {
+    return iniciarBusca(chave, async (vigente) => {
       const armazenamentoDefinido = armazenamento;
       if (armazenamentoDefinido === undefined) {
         throw new Error("inacessível");
@@ -111,10 +113,12 @@ export function criarCachePosicoes<T>(opcoes: {
       }
       registrar(chave, "miss");
       const dados = await opcoes.buscar(chave);
-      await armazenamentoDefinido.gravar(chave, {
-        dados,
-        expiraEm: agora() + ttlMs,
-      });
+      if (vigente()) {
+        await armazenamentoDefinido.gravar(chave, {
+          dados,
+          expiraEm: agora() + ttlMs,
+        });
+      }
       return dados;
     });
   }

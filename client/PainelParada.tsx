@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { api, ErroApi } from "./api";
 import { corDoLetreiro } from "../shared/regioes.ts";
+import { useDialogoModal } from "./hooks";
 import type { Parada } from "../shared/paradas";
 import type { Linha, PrevisaoParada } from "../shared/tipos.ts";
 
@@ -31,19 +32,7 @@ export function PainelParada(props: {
   readonly estaRastreando: (id: number) => boolean;
 }) {
   const { parada, aoFechar, aoRastrear, estaRastreando } = props;
-  const secaoRef = useRef<HTMLElement | null>(null);
-  const focoAnteriorRef = useRef<Element | null>(null);
-
-  // aria-modal sem foco gerenciado deixa o foco atrás do backdrop.
-  useEffect(() => {
-    focoAnteriorRef.current = document.activeElement;
-    secaoRef.current?.focus();
-    return () => {
-      if (focoAnteriorRef.current instanceof HTMLElement) {
-        focoAnteriorRef.current.focus();
-      }
-    };
-  }, []);
+  const { secaoRef } = useDialogoModal();
   const [previsao, setPrevisao] = useState<EstadoPrevisao>(SEM_PREVISAO);
   const [buscando, setBuscando] = useState(false);
   const [rodada, setRodada] = useState(0);
@@ -141,8 +130,7 @@ export function PainelParada(props: {
     >
       <section
         ref={secaoRef}
-        tabIndex={-1}
-        role="dialog"
+        tabIndex={-1}        role="dialog"
         aria-modal="true"
         aria-label="Ponto de ônibus"
         className="max-h-[80dvh] w-full max-w-[430px] overflow-y-auto rounded-t-2xl bg-[#fbfbfa] px-5 pb-8 pt-4 shadow-[0_-10px_40px_rgba(23,24,26,0.25)] outline-none"

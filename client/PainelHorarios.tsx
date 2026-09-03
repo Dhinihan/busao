@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import {
   ErroQuadroAusente,
   apiHorarios,
@@ -6,6 +6,7 @@ import {
   proximasPartidas,
   tipoDiaDe,
 } from "./horarios.ts";
+import { useDialogoModal } from "./hooks";
 import type { QuadroHorarios, TipoDia } from "./horarios.ts";
 import type { Linha } from "../shared/tipos.ts";
 
@@ -27,21 +28,9 @@ export function PainelHorarios(props: {
   readonly aoFechar: () => void;
 }) {
   const { linha, aoFechar } = props;
+  const { secaoRef } = useDialogoModal();
   const [estado, setEstado] = useState<EstadoPainel>(SEM_QUADRO);
   const [agora, setAgora] = useState(() => new Date());
-  const secaoRef = useRef<HTMLElement | null>(null);
-  const focoAnteriorRef = useRef<Element | null>(null);
-
-  // aria-modal sem foco gerenciado deixa o foco atrás do backdrop.
-  useEffect(() => {
-    focoAnteriorRef.current = document.activeElement;
-    secaoRef.current?.focus();
-    return () => {
-      if (focoAnteriorRef.current instanceof HTMLElement) {
-        focoAnteriorRef.current.focus();
-      }
-    };
-  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => setAgora(new Date()), 30_000);

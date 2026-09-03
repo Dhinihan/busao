@@ -203,5 +203,10 @@ test("busca presa não deduplica para sempre após o prazo", async () => {
   // dentro do prazo da busca nova, deduplica nela
   assert.deepEqual(await cache.obter(7), dados);
   assert.deepEqual(chamadas, [7, 7]);
-  void presa;
+  // a busca presa resolve tarde: o resultado vencido é descartado e não
+  // sobrescreve o valor fresco nem limpa a entrada em voo alheia
+  pendentes[0]!.resolve(posicoes("antiga"));
+  await presa;
+  assert.equal((await cache.obter(7)).veiculos[0]!.prefixo, "nova");
+  assert.deepEqual(chamadas, [7, 7]);
 });
