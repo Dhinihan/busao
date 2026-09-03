@@ -132,6 +132,7 @@ export function App() {
         } catch {
           /* vibração é opcional */
         }
+        setParadaSelecionada(null);
         setPainel(linha);
       }, 450),
       x,
@@ -533,7 +534,10 @@ export function App() {
           expandido={mapaExpandido}
           aoAlternarExpansao={() => setMapaExpandido((atual) => !atual)}
           paradaSelecionada={paradaSelecionada}
-          aoSelecionarParada={setParadaSelecionada}
+          aoSelecionarParada={(parada) => {
+            setPainel(null);
+            setParadaSelecionada(parada);
+          }}
         />
 
         {rastreadas.length === 0 && !avisoDispensado && (
