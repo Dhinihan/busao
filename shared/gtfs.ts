@@ -291,7 +291,11 @@ export function casarParadas(opcoes: {
   readonly limiteMetros?: number;
 }): readonly (readonly [string, number])[] {
   const limite = opcoes.limiteMetros ?? 80;
-  const CELULA_GRAU = 0.001; // ~111 m — vizinhança 3×3 cobre o limiar
+  // Célula derivada do limiar: a vizinhança 3×3 cobre no mínimo 1 célula em
+  // cada eixo a partir do ponto consultado. Premissa: latitudes de São Paulo
+  // (1° de lng ≈ 102 km; usando 100 km/° a cobertura fica ≥ o limiar nos
+  // dois eixos).
+  const CELULA_GRAU = limite / 100_000;
   const celula = (lat: number, lng: number): string =>
     `${Math.floor(lat / CELULA_GRAU)},${Math.floor(lng / CELULA_GRAU)}`;
   const grade = new Map<string, string[]>();

@@ -104,7 +104,7 @@ export function criarClienteOlhoVivo(opcoes: ClienteOlhoVivoOpcoes): ClienteOlho
     try {
       resposta = await buscar(
         `${API_BASE}/Login/Autenticar?token=${encodeURIComponent(token)}`,
-        { method: "POST" },
+        { method: "POST", redirect: "error" },
       );
     } catch (causa) {
       throw new ErroOlhoVivo("sem contato com a API da SPTrans", { cause: causa });
@@ -144,8 +144,11 @@ export function criarClienteOlhoVivo(opcoes: ClienteOlhoVivoOpcoes): ClienteOlho
       }
       let resposta: Response;
       try {
+        // redirect "error": o cookie de sessão vai em header manual e não
+        // pode vazar para outro host via redirecionamento automático.
         resposta = await buscar(`${API_BASE}${caminho}`, {
           headers: { cookie: atual.cookie },
+          redirect: "error",
         });
       } catch (causa) {
         throw new ErroOlhoVivo("sem contato com a API da SPTrans", { cause: causa });

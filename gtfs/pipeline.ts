@@ -83,15 +83,22 @@ type ClienteSessao = {
 };
 
 function criarSessaoReutilizavel(token: string): ClienteSessao {
-  let atual: string | null = null;
+  // Guarda a PROMESSA do login, não o cookie resolvido: os 4 workers
+  // arrancam juntos e um único login atende a todos (login custa caro e
+  // a SPTrans recusa em rajada).
+  let pendente: Promise<string> | null = null;
   return {
-    async cookie(): Promise<string> {
-      if (atual !== null) return atual;
-      atual = await criarSessao(token);
-      return atual;
+    cookie(): Promise<string> {
+      if (pendente === null) {
+        pendente = criarSessao(token).catch((erro: unknown) => {
+          pendente = null;
+          throw erro;
+        });
+      }
+      return pendente;
     },
     invalidar(): void {
-      atual = null;
+      pendente = null;
     },
   };
 }

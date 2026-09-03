@@ -9,11 +9,21 @@ export type ArmazenamentoCache<T> = {
 };
 
 const TTL_PADRAO_MS = 7_000;
+const DEDUPE_PADRAO_MS = 10_000;
+const MAX_ENTRADAS_PADRAO = 512;
 
 export function criarCachePosicoes<T>(opcoes: {
   readonly buscar: (chave: number) => Promise<T>;
   readonly agora?: () => number;
   readonly ttlMs?: number;
+  // Prazo em que chamadas simultâneas deduplicam para a mesma promise em
+  // voo. Fetch upstream preso (sem resposta) não pode deduplicar para
+  // sempre — expirado o prazo, a chamada seguinte abre busca nova. Sem
+  // timers: usa só o relógio injetado.
+  readonly prazoDedupeMs?: number;
+  // Teto de entradas em memória: rotas rastreadas e cps reais cabem com
+  // folga; acima disso evict FIFO (as entradas também expiram por TTL).
+  readonly maxEntradas?: number;
   readonly aoRegistrar?: (chave: number, resultado: "hit" | "miss") => void;
   readonly armazenamento?: ArmazenamentoCache<T>;
 }): {
@@ -22,14 +32,29 @@ export function criarCachePosicoes<T>(opcoes: {
 } {
   const agora = opcoes.agora ?? Date.now;
   const ttlMs = opcoes.ttlMs ?? TTL_PADRAO_MS;
+  const prazoDedupeMs = opcoes.prazoDedupeMs ?? DEDUPE_PADRAO_MS;
+  const maxEntradas = opcoes.maxEntradas ?? MAX_ENTRADAS_PADRAO;
   const armazenamento = opcoes.armazenamento;
   const entradasMemoria = new Map<number, EntradaCache<T>>();
-  const emVoo = new Map<number, Promise<T>>();
+  const emVoo = new Map<number, { readonly busca: Promise<T>; readonly iniciadoEm: number }>();
 
   function removerExpiradasMemoria(): void {
     const instante = agora();
     for (const [chave, entrada] of entradasMemoria) {
       if (entrada.expiraEm <= instante) entradasMemoria.delete(chave);
+    }
+  }
+
+  function guardar(chave: number, dados: T): void {
+    removerExpiradasMemoria();
+    entradasMemoria.set(chave, {
+      dados,
+      expiraEm: agora() + ttlMs,
+    });
+    while (entradasMemoria.size > maxEntradas) {
+      const maisAntiga = entradasMemoria.keys().next().value;
+      if (maisAntiga === undefined) break;
+      entradasMemoria.delete(maisAntiga);
     }
   }
 
@@ -43,10 +68,11 @@ export function criarCachePosicoes<T>(opcoes: {
   ): Promise<T> {
     const busca = executar();
     const limpar = (): void => {
-      emVoo.delete(chave);
+      const atual = emVoo.get(chave);
+      if (atual !== undefined && atual.busca === busca) emVoo.delete(chave);
     };
     busca.then(limpar, limpar);
-    emVoo.set(chave, busca);
+    emVoo.set(chave, { busca, iniciadoEm: agora() });
     return busca;
   }
 
@@ -63,11 +89,7 @@ export function criarCachePosicoes<T>(opcoes: {
         opcoes
           .buscar(chave)
           .then((dados) => {
-            removerExpiradasMemoria();
-            entradasMemoria.set(chave, {
-              dados,
-              expiraEm: agora() + ttlMs,
-            });
+            guardar(chave, dados);
             return dados;
           })
           .finally(() => {
@@ -101,8 +123,13 @@ export function criarCachePosicoes<T>(opcoes: {
     obter(chave: number): Promise<T> {
       const andamento = emVoo.get(chave);
       if (andamento !== undefined) {
-        registrar(chave, "hit");
-        return andamento;
+        if (agora() - andamento.iniciadoEm <= prazoDedupeMs) {
+          registrar(chave, "hit");
+          return andamento.busca;
+        }
+        // Fetch upstream preso: não deduplica para sempre — a chamada
+        // seguinte abre busca nova e substitui a entrada em voo.
+        emVoo.delete(chave);
       }
       return armazenamento === undefined
         ? obterDeMemoria(chave)

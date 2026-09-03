@@ -54,12 +54,14 @@ test("decodificador rejeita asset malformado", () => {
     decodificarParadas({ ...asset, c: [1] }),
     null,
   );
+  // comprimento original preservado: cada caso chega à validação que pretende
+  // exercer (índice de letreiro inválido; coordenada fora do intervalo)
   assert.equal(
-    decodificarParadas({ ...asset, l: ["zzzz,"] }),
+    decodificarParadas({ ...asset, l: ["zzzz,", ...asset.l.slice(1)] }),
     null,
   );
   assert.equal(
-    decodificarParadas({ ...asset, y: ["zzz"] }),
+    decodificarParadas({ ...asset, y: ["zzzzzz", ...asset.y.slice(1)] }),
     null,
   );
 });

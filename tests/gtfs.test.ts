@@ -177,28 +177,34 @@ test("casarParadas casa por proximidade e letreiro da linha", () => {
   assert.deepEqual(pares, [["1", 111], ["3", 222]]);
 });
 
-test("casarParadas: cada lado recebe no máximo um par", () => {
+test("casarParadas: cada stop_id e cada cp entram em no máximo um par", () => {
+  // Sem a regra, o casamento ganancioso daria dois pares para a mesma
+  // parada GTFS (A é o par mais próximo e B o segundo) e dois pares para o
+  // mesmo cp. O resultado tem que trancar os dois lados.
   const paradasGtfs = new Map([
     ["1", { lat: -23.55, lng: -46.64, letreiros: new Set(["8000"]) }],
-    ["2", { lat: -23.5501, lng: -46.6401, letreiros: new Set(["8000"]) }],
   ]);
   const pares = casarParadas({
     paradasGtfs,
     paradasOlhoVivo: [
       { cp: 111, nome: "A", lat: -23.55, lng: -46.64 },
-      { cp: 222, nome: "B", lat: -23.55002, lng: -46.64002 },
+      { cp: 222, nome: "B", lat: -23.55005, lng: -46.64 },
     ],
     letreiros: new Set(["8000"]),
   });
-  assert.equal(pares.length, 2);
-  const stopIds = pares.map(([stopId]) => stopId);
-  const cps = pares.map(([, cp]) => cp);
-  assert.equal(new Set(stopIds).size, 2);
-  assert.equal(new Set(cps).size, 2);
-  // o par mais próximo (cp 111 → parada 1, a 0 m) vence o ganancioso; o
-  // cp 222, que preferia a mesma parada, cai na segunda mais próxima.
-  assert.deepEqual(pares[0], ["1", 111]);
-  assert.deepEqual(pares[1], ["2", 222]);
+  assert.deepEqual(pares, [["1", 111]]);
+
+  const paradasGtfs2 = new Map([
+    ["1", { lat: -23.55, lng: -46.64, letreiros: new Set(["8000"]) }],
+    ["2", { lat: -23.55004, lng: -46.64, letreiros: new Set(["8000"]) }],
+  ]);
+  const pares2 = casarParadas({
+    paradasGtfs: paradasGtfs2,
+    paradasOlhoVivo: [{ cp: 333, nome: "C", lat: -23.55001, lng: -46.64 }],
+    letreiros: new Set(["8000"]),
+  });
+  // cp 333 casa com a parada 1 (mais próxima); a 2 fica sem par.
+  assert.deepEqual(pares2, [["1", 333]]);
 });
 
 test("casarParadas ignora paradas além do limiar", () => {

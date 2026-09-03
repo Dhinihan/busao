@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
   ErroQuadroAusente,
   apiHorarios,
@@ -29,6 +29,19 @@ export function PainelHorarios(props: {
   const { linha, aoFechar } = props;
   const [estado, setEstado] = useState<EstadoPainel>(SEM_QUADRO);
   const [agora, setAgora] = useState(() => new Date());
+  const secaoRef = useRef<HTMLElement | null>(null);
+  const focoAnteriorRef = useRef<Element | null>(null);
+
+  // aria-modal sem foco gerenciado deixa o foco atrás do backdrop.
+  useEffect(() => {
+    focoAnteriorRef.current = document.activeElement;
+    secaoRef.current?.focus();
+    return () => {
+      if (focoAnteriorRef.current instanceof HTMLElement) {
+        focoAnteriorRef.current.focus();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => setAgora(new Date()), 30_000);
@@ -78,10 +91,12 @@ export function PainelHorarios(props: {
       onClick={aoFechar}
     >
       <section
+        ref={secaoRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={`Horários de saída da linha ${linha.letreiro}`}
-        className="w-full max-w-[430px] rounded-t-2xl bg-[#fbfbfa] px-5 pb-8 pt-4 shadow-[0_-10px_40px_rgba(23,24,26,0.25)]"
+        className="w-full max-w-[430px] rounded-t-2xl bg-[#fbfbfa] px-5 pb-8 pt-4 shadow-[0_-10px_40px_rgba(23,24,26,0.25)] outline-none"
         onClick={(evento) => evento.stopPropagation()}
       >
         <header className="mb-3 flex items-start justify-between gap-3">
