@@ -23,13 +23,19 @@ export type AssetParadas = {
 const BASE = 36;
 
 function paraBase36(valor: number): string {
+  if (valor === 0) return "0";
   const negativo = valor < 0;
-  let resto = Math.abs(valor);
   let texto = "";
-  do {
+  // Bounded por construção: resto encolhe por divisão inteira a cada volta
+  // (o runtime da capsule barra loops `while` no código de servidor —
+  // docs/lakebed.md).
+  for (
+    let resto = Math.abs(valor);
+    resto > 0;
+    resto = Math.floor(resto / BASE)
+  ) {
     texto = "0123456789abcdefghijklmnopqrstuvwxyz"[resto % BASE] + texto;
-    resto = Math.floor(resto / BASE);
-  } while (resto > 0);
+  }
   return (negativo ? "-" : "") + texto;
 }
 

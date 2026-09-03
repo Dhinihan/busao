@@ -51,7 +51,10 @@ export function criarCachePosicoes<T>(opcoes: {
       dados,
       expiraEm: agora() + ttlMs,
     });
-    while (entradasMemoria.size > maxEntradas) {
+    // Evict FIFO limitado ao excedente (o runtime da capsule barra loops
+    // `while` no código de servidor — docs/lakebed.md).
+    const excedente = entradasMemoria.size - maxEntradas;
+    for (let i = 0; i < excedente; i += 1) {
       const maisAntiga = entradasMemoria.keys().next().value;
       if (maisAntiga === undefined) break;
       entradasMemoria.delete(maisAntiga);

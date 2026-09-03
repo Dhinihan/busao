@@ -131,6 +131,11 @@ Conclusões da rodada 2:
 - Sem npm arbitrário nem Node built-ins na capsule. Imports permitidos:
   relativos, `lakebed/server`, `lakebed/client` e os módulos Preact providos
   pela plataforma.
+- Loops `while`/`do..while` são barrados no build de deploy do
+  server/shared ("while loops are not available in anonymous server code");
+  usar `for` com término por construção. A CI do PR não roda esse build —
+  ele só roda no push para o branch principal, ou seja, o erro aparece
+  depois do merge. Também não há `setTimeout` no runtime hospedado.
 - Client sem arquivo CSS nem shell HTML próprio: estilos em Tailwind inline ou
   `style` no JSX; `capsule({ name, favicon })` controla título e ícone.
 - `req.query` é `URLSearchParams`; não existe `req.params` e o matcher usa
