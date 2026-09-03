@@ -6,6 +6,7 @@ import {
   proximasPartidas,
   tipoDiaDe,
 } from "./horarios.ts";
+import { useDialogoModal } from "./hooks";
 import type { QuadroHorarios, TipoDia } from "./horarios.ts";
 import type { Linha } from "../shared/tipos.ts";
 
@@ -27,6 +28,7 @@ export function PainelHorarios(props: {
   readonly aoFechar: () => void;
 }) {
   const { linha, aoFechar } = props;
+  const { secaoRef } = useDialogoModal();
   const [estado, setEstado] = useState<EstadoPainel>(SEM_QUADRO);
   const [agora, setAgora] = useState(() => new Date());
 
@@ -78,10 +80,12 @@ export function PainelHorarios(props: {
       onClick={aoFechar}
     >
       <section
+        ref={secaoRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={`Horários de saída da linha ${linha.letreiro}`}
-        className="w-full max-w-[430px] rounded-t-2xl bg-[#fbfbfa] px-5 pb-8 pt-4 shadow-[0_-10px_40px_rgba(23,24,26,0.25)]"
+        className="w-full max-w-[430px] rounded-t-2xl bg-[#fbfbfa] px-5 pb-8 pt-4 shadow-[0_-10px_40px_rgba(23,24,26,0.25)] outline-none"
         onClick={(evento) => evento.stopPropagation()}
       >
         <header className="mb-3 flex items-start justify-between gap-3">

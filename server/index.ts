@@ -10,7 +10,9 @@ import { criarEstadoDb, type LinhaEstado } from "./estado-db.ts";
 import { criarCachePosicoes } from "./cache-posicoes.ts";
 import {
   MENSAGEM_LINHA_INVALIDA,
+  MENSAGEM_PARADA_INVALIDA,
   MENSAGEM_TERMO_CURTO,
+  cpParadaValido,
   idLinhaValido,
   termoValido,
 } from "../shared/validadores.ts";
@@ -90,6 +92,17 @@ const cachePosicoes = criarCachePosicoes({
   },
 });
 
+// Previsão de chegada por parada: muda devagar e não tem polling no cliente;
+// TTL só colapsa rajada de usuários na mesma parada. Sempre em memória —
+// escrita no DB queima a cota de mutations (docs/lakebed.md).
+const cachePrevisoes = criarCachePosicoes({
+  buscar: (codigoParada) => olhovivo.previsaoDaParada(codigoParada),
+  ttlMs: 30_000,
+  aoRegistrar: (codigoParada, resultado) => {
+    logAtual.info("cache previsao", { codigoParada, resultado });
+  },
+});
+
 function respostaDeErro(erro: unknown) {
   if (erro instanceof ErroOlhoVivo || erro instanceof ErroGeoSampa) {
     return json({ erro: erro.message }, { status: 502 });
@@ -157,6 +170,22 @@ export default capsule({
         }
         try {
           return json(await geosampa.rotaDaLinha(letreiro));
+        } catch (erro) {
+          return respostaDeErro(erro);
+        }
+      },
+    ),
+
+    previsao: endpoint(
+      { method: "GET", path: "/api/previsao" },
+      async (ctx, req) => {
+        preparar(ctx);
+        const cp = Number(req.query.get("parada") ?? "");
+        if (!cpParadaValido(cp)) {
+          return json({ erro: MENSAGEM_PARADA_INVALIDA }, { status: 400 });
+        }
+        try {
+          return json(await cachePrevisoes.obter(cp));
         } catch (erro) {
           return respostaDeErro(erro);
         }

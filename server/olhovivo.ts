@@ -1,5 +1,5 @@
-import { paraLinha, paraPosicoes } from "../shared/parsers.ts";
-import type { Linha, PosicoesDaLinha } from "../shared/tipos.ts";
+import { paraLinha, paraPosicoes, paraPrevisaoParada } from "../shared/parsers.ts";
+import type { Linha, PosicoesDaLinha, PrevisaoParada } from "../shared/tipos.ts";
 
 const API_BASE = "https://api.olhovivo.sptrans.com.br/v2.1";
 
@@ -40,6 +40,7 @@ export function interpretarSessao(valor: unknown): Sessao | null {
 export type ClienteOlhoVivo = {
   readonly buscarLinhas: (termo: string) => Promise<readonly Linha[]>;
   readonly posicoesDaLinha: (codigoLinha: number) => Promise<PosicoesDaLinha>;
+  readonly previsaoDaParada: (codigoParada: number) => Promise<PrevisaoParada>;
   readonly validar: (token: string) => Promise<boolean>;
   readonly descartarSessao: () => void;
 };
@@ -103,7 +104,7 @@ export function criarClienteOlhoVivo(opcoes: ClienteOlhoVivoOpcoes): ClienteOlho
     try {
       resposta = await buscar(
         `${API_BASE}/Login/Autenticar?token=${encodeURIComponent(token)}`,
-        { method: "POST" },
+        { method: "POST", redirect: "error" },
       );
     } catch (causa) {
       throw new ErroOlhoVivo("sem contato com a API da SPTrans", { cause: causa });
@@ -143,8 +144,11 @@ export function criarClienteOlhoVivo(opcoes: ClienteOlhoVivoOpcoes): ClienteOlho
       }
       let resposta: Response;
       try {
+        // redirect "error": o cookie de sessão vai em header manual e não
+        // pode vazar para outro host via redirecionamento automático.
         resposta = await buscar(`${API_BASE}${caminho}`, {
           headers: { cookie: atual.cookie },
+          redirect: "error",
         });
       } catch (causa) {
         throw new ErroOlhoVivo("sem contato com a API da SPTrans", { cause: causa });
@@ -187,6 +191,17 @@ export function criarClienteOlhoVivo(opcoes: ClienteOlhoVivoOpcoes): ClienteOlho
         throw new ErroOlhoVivo("resposta inesperada de posições");
       }
       return posicoes;
+    },
+
+    async previsaoDaParada(codigoParada: number): Promise<PrevisaoParada> {
+      const dados = await requisitar(
+        `/Previsao/Parada?codigoParada=${codigoParada}`,
+      );
+      const previsao = paraPrevisaoParada(dados);
+      if (previsao === null) {
+        throw new ErroOlhoVivo("resposta inesperada de previsão");
+      }
+      return previsao;
     },
 
     async validar(token: string): Promise<boolean> {

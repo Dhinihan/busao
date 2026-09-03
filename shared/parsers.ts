@@ -3,6 +3,9 @@ import type {
   PosicaoVeiculo,
   PosicoesDaLinha,
   PontoRota,
+  PrevisaoChegada,
+  PrevisaoLinha,
+  PrevisaoParada,
   RotaDaLinha,
   Sentido,
   StatusApi,
@@ -188,4 +191,106 @@ export function paraRotaDoCliente(bruto: unknown): RotaDaLinha | null {
     if (pontos.length >= 2) trechos.push(pontos);
   }
   return { trechos };
+}
+
+function paraPrevisoesChegada(bruto: unknown): PrevisaoChegada[] {
+  if (!Array.isArray(bruto)) return [];
+  const previsoes: PrevisaoChegada[] = [];
+  for (const item of bruto) {
+    if (typeof item !== "object" || item === null) continue;
+    const prefixo = campoDe(item, "p");
+    const horario = campoDe(item, "t");
+    if (!ehTexto(prefixo) || !ehTexto(horario)) continue;
+    previsoes.push({
+      prefixo,
+      horario,
+      acessivel: campoDe(item, "a") === true,
+    });
+  }
+  return previsoes;
+}
+
+function paraPrevisaoLinha(bruto: unknown): PrevisaoLinha | null {
+  if (typeof bruto !== "object" || bruto === null) return null;
+  const cl = campoDe(bruto, "cl");
+  if (!ehNumero(cl)) return null;
+  const letreiro = campoDe(bruto, "c");
+  if (!ehTexto(letreiro)) return null;
+  const lt0 = campoDe(bruto, "lt0");
+  const lt1 = campoDe(bruto, "lt1");
+  // Na previsão, lt0 é o letreiro de destino da linha (doc Olho Vivo).
+  const destino = [lt0, lt1].filter(ehTexto).find((t) => t !== "") ?? "";
+  return {
+    cl,
+    letreiro,
+    destino,
+    previsoes: paraPrevisoesChegada(campoDe(bruto, "vs")),
+  };
+}
+
+// Resposta crua de /Previsao/Parada da API Olho Vivo:
+// { hr, p: { cp, np, py, px, l: [...] } }
+export function paraPrevisaoParada(bruto: unknown): PrevisaoParada | null {
+  if (typeof bruto !== "object" || bruto === null) return null;
+  const parada = campoDe(bruto, "p");
+  if (typeof parada !== "object" || parada === null) return null;
+  const linhasBrutas = campoDe(parada, "l");
+  if (!Array.isArray(linhasBrutas)) return null;
+  const horarioBruto = campoDe(bruto, "hr");
+  const latBruto = campoDe(parada, "py");
+  const lngBruto = campoDe(parada, "px");
+  const linhas: PrevisaoLinha[] = [];
+  for (const item of linhasBrutas) {
+    const linha = paraPrevisaoLinha(item);
+    if (linha !== null) linhas.push(linha);
+  }
+  return {
+    horario: ehTexto(horarioBruto) ? horarioBruto : "",
+    nome: ehTexto(campoDe(parada, "np")) ? (campoDe(parada, "np") as string) : "",
+    lat: ehNumero(latBruto) ? latBruto : null,
+    lng: ehNumero(lngBruto) ? lngBruto : null,
+    linhas,
+  };
+}
+
+// Forma serializada pelo nosso servidor (camelCase) — espelha paraPosicoesDoCliente.
+export function paraPrevisaoDoCliente(bruto: unknown): PrevisaoParada | null {
+  if (typeof bruto !== "object" || bruto === null) return null;
+  if (!("horario" in bruto) || typeof bruto.horario !== "string") return null;
+  if (!("linhas" in bruto) || !Array.isArray(bruto.linhas)) return null;
+  const nome = "nome" in bruto && typeof bruto.nome === "string" ? bruto.nome : "";
+  const lat =
+    "lat" in bruto && typeof bruto.lat === "number" && Number.isFinite(bruto.lat)
+      ? bruto.lat
+      : null;
+  const lng =
+    "lng" in bruto && typeof bruto.lng === "number" && Number.isFinite(bruto.lng)
+      ? bruto.lng
+      : null;
+  const linhas: PrevisaoLinha[] = [];
+  for (const item of bruto.linhas) {
+    if (typeof item !== "object" || item === null) continue;
+    const cl = "cl" in item ? item.cl : undefined;
+    const letreiro = "letreiro" in item ? item.letreiro : undefined;
+    if (typeof cl !== "number" || typeof letreiro !== "string") continue;
+    const destino =
+      "destino" in item && typeof item.destino === "string" ? item.destino : "";
+    const previsoes: PrevisaoChegada[] = [];
+    if ("previsoes" in item && Array.isArray(item.previsoes)) {
+      for (const chegada of item.previsoes) {
+        if (typeof chegada !== "object" || chegada === null) continue;
+        const prefixo = "prefixo" in chegada ? chegada.prefixo : undefined;
+        const horario = "horario" in chegada ? chegada.horario : undefined;
+        if (typeof prefixo !== "string" || typeof horario !== "string") continue;
+        previsoes.push({
+          prefixo,
+          horario,
+          acessivel:
+            "acessivel" in chegada && chegada.acessivel === true,
+        });
+      }
+    }
+    linhas.push({ cl, letreiro, destino, previsoes });
+  }
+  return { horario: bruto.horario, nome, lat, lng, linhas };
 }

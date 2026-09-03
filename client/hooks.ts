@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { api, ErroApi } from "./api.ts";
 import { ehLinha } from "../shared/parsers.ts";
 import type { Linha, PosicoesDaLinha, RotaDaLinha, Sentido } from "../shared/tipos.ts";
@@ -10,6 +10,82 @@ export function useValorPostergado<T>(valor: T, atrasoMs: number): T {
     return () => window.clearTimeout(timer);
   }, [valor, atrasoMs]);
   return postergado;
+}
+
+const SELETOR_FOCavel =
+  "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])";
+
+// Diálogo aria-modal completo: foco entra na abertura, Tab/Shift+Tab
+// circulam só pelos controles do diálogo (focus trap) e o foco volta ao
+// elemento que abriu o painel. Se mais de um diálogo estiver montado,
+// apenas o do topo da pilha reage ao teclado — os de baixo ficam mudos.
+const pilhaDialogos: HTMLElement[] = [];
+
+export function useDialogoModal(): {
+  readonly secaoRef: (elemento: HTMLElement | null) => void;
+} {
+  const secaoRef = useRef<HTMLElement | null>(null);
+  const focoAnteriorRef = useRef<Element | null>(null);
+
+  useEffect(() => {
+    const secao = secaoRef.current;
+    if (secao === null) return;
+    const dialogo: HTMLElement = secao;
+    focoAnteriorRef.current = document.activeElement;
+    dialogo.focus();
+    pilhaDialogos.push(dialogo);
+    const ehTopo = (): boolean =>
+      pilhaDialogos[pilhaDialogos.length - 1] === dialogo;
+
+    function aoTeclarTab(evento: KeyboardEvent): void {
+      if (evento.key !== "Tab" || !ehTopo()) return;
+      const ativo = document.activeElement;
+      if (ativo !== null && !dialogo.contains(ativo)) {
+        // foco escapou do diálogo: traz de volta
+        evento.preventDefault();
+        dialogo.focus();
+        return;
+      }
+      const focaveis = [
+        ...dialogo.querySelectorAll<HTMLElement>(SELETOR_FOCavel),
+      ].filter((el) => !el.hasAttribute("disabled") && el.offsetParent !== null);
+      if (focaveis.length === 0) {
+        evento.preventDefault();
+        dialogo.focus();
+        return;
+      }
+      const primeiro = focaveis[0]!;
+      const ultimo = focaveis[focaveis.length - 1]!;
+      if (evento.shiftKey && (ativo === primeiro || ativo === dialogo)) {
+        evento.preventDefault();
+        ultimo.focus();
+        return;
+      }
+      if (!evento.shiftKey && ativo === ultimo) {
+        evento.preventDefault();
+        primeiro.focus();
+      }
+    }
+
+    window.addEventListener("keydown", aoTeclarTab, true);
+    return () => {
+      window.removeEventListener("keydown", aoTeclarTab, true);
+      const eraTopo = ehTopo();
+      const indice = pilhaDialogos.indexOf(secao);
+      if (indice >= 0) pilhaDialogos.splice(indice, 1);
+      // só o diálogo do topo devolve o foco — se houver um de baixo, é
+      // para ele que o foco deve voltar (o focoAnterior do topo).
+      if (eraTopo && focoAnteriorRef.current instanceof HTMLElement) {
+        focoAnteriorRef.current.focus();
+      }
+    };
+  }, []);
+
+  return {
+    secaoRef: (elemento: HTMLElement | null) => {
+      secaoRef.current = elemento;
+    },
+  };
 }
 
 const CHAVE_FAVORITAS = "busao:favoritas";

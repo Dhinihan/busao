@@ -13,7 +13,10 @@
     "client/api.ts",
     "client/hooks.ts",
     "client/horarios.ts",
+    "client/paradas.ts",
+    "client/paradas-dados.ts",
     "client/PainelHorarios.tsx",
+    "client/PainelParada.tsx",
     "tests"
   ]
 }

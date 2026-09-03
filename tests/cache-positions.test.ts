@@ -145,3 +145,68 @@ test("remove entradas expiradas ao inserir novas", async () => {
   await c;
   assert.equal(cache.tamanho(), 1, "expiradas de linhas antigas foram removidas");
 });
+
+test("cache evicta entradas antigas ao passar do teto", async () => {
+  agoraMs = 1_000;
+  pendentes = [];
+  chamadas = [];
+  const cache = criarCachePosicoes({
+    agora: () => agoraMs,
+    maxEntradas: 2,
+    buscar: async (linhaId: number) => {
+      chamadas.push(linhaId);
+      return posicoes(`p${linhaId}`);
+    },
+  });
+  await cache.obter(1);
+  await cache.obter(2);
+  assert.deepEqual(chamadas, [1, 2]);
+  // terceira entrada evicta a mais antiga (1)
+  await cache.obter(3);
+  assert.deepEqual(chamadas, [1, 2, 3]);
+  await cache.obter(1);
+  assert.deepEqual(chamadas, [1, 2, 3, 1]);
+  // evição FIFO: o 1 reentrando derruba o 2, e o 2 derruba o 3
+  await cache.obter(2);
+  await cache.obter(3);
+  assert.deepEqual(chamadas, [1, 2, 3, 1, 2, 3]);
+  assert.equal(cache.tamanho(), 2);
+});
+
+test("busca presa não deduplica para sempre após o prazo", async () => {
+  agoraMs = 1_000;
+  pendentes = [];
+  chamadas = [];
+  const cache = criarCachePosicoes({
+    agora: () => agoraMs,
+    prazoDedupeMs: 10_000,
+    buscar: async (linhaId: number) => {
+      chamadas.push(linhaId);
+      return new Promise<PosicoesDaLinha>((resolve, reject) => {
+        pendentes.push({ resolve, reject });
+      });
+    },
+  });
+  const presa = cache.obter(7);
+  assert.deepEqual(chamadas, [7]);
+  // dentro do prazo, chamadas deduplicam na mesma promise presa
+  void cache.obter(7);
+  assert.deepEqual(chamadas, [7]);
+  // presa além do prazo: a chamada seguinte abre busca nova
+  agoraMs = 12_000;
+  const nova = cache.obter(7);
+  assert.deepEqual(chamadas, [7, 7]);
+  // resolve apenas a busca nova (a presa fica pendente para sempre)
+  pendentes[1]!.resolve(posicoes("nova"));
+  const dados = await nova;
+  assert.equal(dados.veiculos[0]!.prefixo, "nova");
+  // dentro do prazo da busca nova, deduplica nela
+  assert.deepEqual(await cache.obter(7), dados);
+  assert.deepEqual(chamadas, [7, 7]);
+  // a busca presa resolve tarde: o resultado vencido é descartado e não
+  // sobrescreve o valor fresco nem limpa a entrada em voo alheia
+  pendentes[0]!.resolve(posicoes("antiga"));
+  await presa;
+  assert.equal((await cache.obter(7)).veiculos[0]!.prefixo, "nova");
+  assert.deepEqual(chamadas, [7, 7]);
+});
