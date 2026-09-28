@@ -6,6 +6,7 @@ import {
   distanciaMetros,
   expandirJanela,
   extrairCores,
+  extrairNomes,
   extrairRotas,
   prefixoLetreiro,
   tiposDiaDoServico,
@@ -146,6 +147,38 @@ test("extrairCores: primeira variante vence quando variantes divergem", () => {
     'route_id,route_color\n"3063-10","DA291C"\n"3063-11","FFD100"',
   );
   assert.deepEqual(extrairCores(registros), { "3063": "#DA291C" });
+});
+
+test("extrairNomes: primeira variante vence e nome vazio é ignorado", () => {
+  const registros = csvParaRegistros(
+    [
+      "route_id,route_long_name",
+      '"1012-10","Term. Jd. Britania - Jd. Monte Belo"',
+      '"1012-21","Term. Jd. Britânia - Jd. Rosinha"',
+      '"9999-10",""',
+    ].join("\n"),
+  );
+  assert.deepEqual(extrairNomes(registros), {
+    "1012": "Term. Jd. Britania - Jd. Monte Belo",
+  });
+});
+
+test("extrairNomes corrige numeral romano e acento inicial do feed", () => {
+  const registros = csvParaRegistros(
+    [
+      "route_id,route_long_name",
+      '"N106-11","Term. Pq. D. Pedro Ii - Metrô Barra Funda"',
+      '"7545-10","Jd. João Xxiii - Xv De Novembro"',
+      '"5391-10","Jd. âNgela - Term. áGua Espraiada"',
+      '"1111-10","Vl. Vivi - Pça. Da áRvore"',
+    ].join("\n"),
+  );
+  assert.deepEqual(extrairNomes(registros), {
+    N106: "Term. Pq. D. Pedro II - Metrô Barra Funda",
+    "7545": "Jd. João XXIII - XV De Novembro",
+    "5391": "Jd. Ângela - Term. Água Espraiada",
+    "1111": "Vl. Vivi - Pça. Da Árvore",
+  });
 });
 
 test("distanciaMetros mede curta distância com precisão de rua", () => {

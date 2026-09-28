@@ -1,6 +1,7 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { api, ErroApi } from "./api";
 import { corDoLetreiro } from "../shared/regioes.ts";
+import { NOMES_POR_LETREIRO } from "../shared/nomes.ts";
 import { useDialogoModal } from "./hooks";
 import type { Parada } from "../shared/paradas";
 import type { Linha, PrevisaoParada } from "../shared/tipos.ts";
@@ -41,6 +42,7 @@ export function PainelParada(props: {
     readonly Linha[] | null
   >(null);
   const [erroLinhas, setErroLinhas] = useState<string | null>(null);
+  const fileiraAbertaRef = useRef<HTMLLIElement | null>(null);
 
   // Previsão sem polling: busca ao abrir o painel e só de novo por clique
   // em "atualizar". Reabrir o painel busca de novo — 1 request por ação.
@@ -80,11 +82,11 @@ export function PainelParada(props: {
   }, [cp, rodada]);
 
   useEffect(() => {
-    if (letreiroAberto === null) {
-      setLinhasDoLetreiro(null);
-      setErroLinhas(null);
-      return;
-    }
+    // Zera antes de qualquer busca: sem isso, ao trocar de linha a fileira
+    // nova exibiria (e deixaria rastrear) os sentidos da anterior.
+    setLinhasDoLetreiro(null);
+    setErroLinhas(null);
+    if (letreiroAberto === null) return;
     let cancelado = false;
     const controle = new AbortController();
     api
@@ -106,6 +108,12 @@ export function PainelParada(props: {
       controle.abort();
     };
   }, [letreiroAberto]);
+
+  // A lista de linhas rola sozinha: mantém à vista a fileira aberta e seus
+  // sentidos, que crescem quando a busca termina.
+  useEffect(() => {
+    fileiraAbertaRef.current?.scrollIntoView({ block: "nearest" });
+  }, [letreiroAberto, linhasDoLetreiro, erroLinhas]);
 
   useEffect(() => {
     function aoTeclar(evento: KeyboardEvent): void {
@@ -171,12 +179,17 @@ export function PainelParada(props: {
             <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[#66696f]">
               linhas que passam aqui
             </span>
-            <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+            <ul className="m-0 flex max-h-[236px] list-none flex-col overflow-y-auto overscroll-contain p-0">
               {parada.letreiros.map((letreiro) => {
                 const cor = corDoLetreiro(letreiro);
+                const nomeLinha = NOMES_POR_LETREIRO[letreiro];
                 const aberto = letreiroAberto === letreiro;
                 return (
-                  <li key={letreiro}>
+                  <li
+                    key={letreiro}
+                    ref={aberto ? fileiraAbertaRef : undefined}
+                    className="border-b border-[#eceeea] last:border-b-0"
+                  >
                     <button
                       type="button"
                       onClick={() =>
@@ -185,62 +198,79 @@ export function PainelParada(props: {
                         )
                       }
                       aria-expanded={aberto}
-                      className="cursor-pointer rounded-lg px-2 py-1 font-mono text-[12px] font-bold text-white shadow-[inset_0_-1px_0_rgba(0,0,0,0.2)]"
-                      style={{ backgroundColor: cor ?? "#6b6f76" }}
+                      title={nomeLinha}
+                      className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-transparent px-1 py-2 text-left hover:bg-[#eceeea]"
                     >
-                      {letreiro}
+                      <span
+                        className="w-[52px] shrink-0 rounded-md py-1 text-center font-mono text-[12px] font-bold text-white shadow-[inset_0_-1px_0_rgba(0,0,0,0.2)]"
+                        style={{ backgroundColor: cor ?? "#6b6f76" }}
+                      >
+                        {letreiro}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-[#191a1c]">
+                        {nomeLinha !== undefined ? (
+                          nomeLinha
+                        ) : (
+                          <span className="text-[#9aa0a6]">sem nome no quadro</span>
+                        )}
+                      </span>
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="#9aa0a6"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={"shrink-0 transition-transform " + (aberto ? "rotate-180" : "")}
+                      >
+                        <path d="M6 9l6 6 6-6" />
+                      </svg>
                     </button>
+                    {aberto && (
+                      <div className="mb-2 ml-[62px] rounded-[10px] border border-[#dcdedb] bg-white p-2">
+                        {erroLinhas !== null && (
+                          <p className="m-0 text-[13px] text-[#bf3b2b]">{erroLinhas}</p>
+                        )}
+                        {linhasDoLetreiro === null && erroLinhas === null && (
+                          <p className="m-0 text-[13px] text-[#66696f]">buscando sentidos…</p>
+                        )}
+                        {linhasDoLetreiro !== null && linhasDoLetreiro.length === 0 && erroLinhas === null && (
+                          <p className="m-0 text-[13px] text-[#66696f]">
+                            nenhuma linha ativa encontrada com esse letreiro.
+                          </p>
+                        )}
+                        {linhasDoLetreiro !== null &&
+                          linhasDoLetreiro.map((linha) => (
+                            <button
+                              key={linha.id}
+                              type="button"
+                              onClick={() => aoRastrear(linha)}
+                              aria-pressed={estaRastreando(linha.id)}
+                              className={
+                                "flex w-full cursor-pointer items-center gap-2 rounded-lg border-0 px-2 py-1.5 text-left " +
+                                (estaRastreando(linha.id)
+                                  ? "bg-[#fff7e0] shadow-[inset_0_0_0_2px_#ffb300]"
+                                  : "bg-transparent hover:bg-[#eceeea]")
+                              }
+                            >
+                              <span className="min-w-0 flex-1 truncate text-[12px] text-[#191a1c]">
+                                <span className="font-mono font-bold">{linha.letreiro}</span>{" "}
+                                → {linha.descricao || "—"}
+                              </span>
+                              <span className="shrink-0 text-[11px] font-semibold">
+                                {estaRastreando(linha.id) ? "rastreando" : "rastrear →"}
+                              </span>
+                            </button>
+                          ))}
+                      </div>
+                    )}
                   </li>
                 );
               })}
             </ul>
-          </div>
-        )}
-
-        {letreiroAberto !== null && (
-          <div className="mb-4 rounded-[10px] border border-[#dcdedb] bg-white p-3">
-            <p className="m-0 mb-1.5 text-[12px] text-[#66696f]">
-              sentido(s) de <span className="font-mono font-bold">{letreiroAberto}</span>:
-            </p>
-            {erroLinhas !== null && (
-              <p className="m-0 text-[13px] text-[#bf3b2b]">{erroLinhas}</p>
-            )}
-            {linhasDoLetreiro === null && erroLinhas === null && (
-              <p className="m-0 text-[13px] text-[#66696f]">buscando…</p>
-            )}
-            {linhasDoLetreiro !== null && linhasDoLetreiro.length === 0 && (
-              <p className="m-0 text-[13px] text-[#66696f]">
-                nenhuma linha ativa encontrada com esse letreiro.
-              </p>
-            )}
-            {linhasDoLetreiro !== null &&
-              linhasDoLetreiro.map((linha) => (
-                <div key={linha.id} className="mt-1 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => aoRastrear(linha)}
-                    aria-pressed={estaRastreando(linha.id)}
-                    className={
-                      "min-w-0 flex-1 cursor-pointer rounded-lg border-0 px-2 py-1.5 text-left " +
-                      (estaRastreando(linha.id)
-                        ? "bg-[#fff7e0] shadow-[inset_0_0_0_2px_#ffb300]"
-                        : "bg-transparent hover:bg-[#eceeea]")
-                    }
-                  >
-                    <span className="block font-mono text-[13px] font-black">
-                      {linha.letreiro}
-                    </span>
-                    <span className="block truncate text-[12px] text-[#66696f]">
-                      {linha.descricao || "—"}
-                    </span>
-                  </button>
-                  <span
-                    className="shrink-0 text-[11px] font-semibold"
-                  >
-                    {estaRastreando(linha.id) ? "rastreando" : "rastrear →"}
-                  </span>
-                </div>
-              ))}
           </div>
         )}
 
