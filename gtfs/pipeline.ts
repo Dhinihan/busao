@@ -16,6 +16,7 @@ import {
   csvParaRegistros,
   casarParadas,
   extrairCores,
+  extrairNomes,
   extrairRotas,
   prefixoLetreiro,
   type ParadaOlhoVivo,
@@ -238,14 +239,17 @@ function emitirSql(
   return partes.join("\n");
 }
 
-function emitirCoresTs(cores: Readonly<Record<string, string>>): string {
-  const entradas = Object.entries(cores)
+function emitirMapaTs(
+  nome: string,
+  valores: Readonly<Record<string, string>>,
+): string {
+  const entradas = Object.entries(valores)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([letreiro, cor]) => `${JSON.stringify(letreiro)}:${JSON.stringify(cor)}`)
+    .map(([letreiro, valor]) => `${JSON.stringify(letreiro)}:${JSON.stringify(valor)}`)
     .join(",");
   return [
     "// GERADO por gtfs/pipeline.ts a partir de routes.txt do GTFS — não editar à mão.",
-    "export const CORES_POR_LETREIRO: Readonly<Record<string, string>> = {" +
+    `export const ${nome}: Readonly<Record<string, string>> = {` +
       entradas +
       "};",
     "",
@@ -460,8 +464,12 @@ const rotas = extrairRotas(fontes);
 console.log(`Rotas extraídas do GTFS: ${rotas.length}`);
 
 const cores = extrairCores(fontes.rotas);
-writeFileSync(`${raiz}shared/cores.ts`, emitirCoresTs(cores));
+writeFileSync(`${raiz}shared/cores.ts`, emitirMapaTs("CORES_POR_LETREIRO", cores));
 console.log(`Cores oficiais: ${Object.keys(cores).length} letreiros -> shared/cores.ts`);
+
+const nomes = extrairNomes(fontes.rotas);
+writeFileSync(`${raiz}shared/nomes.ts`, emitirMapaTs("NOMES_POR_LETREIRO", nomes));
+console.log(`Nomes das linhas: ${Object.keys(nomes).length} letreiros -> shared/nomes.ts`);
 
 const letreirosNecessarios = [...new Set(rotas.map((r) => prefixoLetreiro(r.routeId)))];
 

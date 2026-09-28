@@ -256,6 +256,38 @@ export function extrairCores(
   return cores;
 }
 
+// O feed capitaliza tudo como palavra: numeral romano ("D. Pedro Ii") e letra
+// acentuada no começo ("âNgela"). Volta para "II" e "Ângela".
+const NUMERAL_ROMANO = /^X{0,3}(IX|IV|V?I{0,3})$/;
+
+function corrigirCaixa(nome: string): string {
+  return nome
+    .replace(/\b[IVX][ivx]+\b/g, (palavra) =>
+      NUMERAL_ROMANO.test(palavra.toUpperCase()) ? palavra.toUpperCase() : palavra,
+    )
+    .replace(
+      /(^|[\s.\-/(])([à-ÿ])([A-Z])/g,
+      (_, antes: string, acentuada: string, seguinte: string) =>
+        antes + acentuada.toUpperCase() + seguinte.toLowerCase(),
+    );
+}
+
+// Nome da linha (route_long_name de routes.txt) por letreiro sem sufixo. A
+// primeira variante do feed vence e nome ausente é descartado — mesma regra
+// de extrairCores.
+export function extrairNomes(
+  rotas: readonly Registro[],
+): Readonly<Record<string, string>> {
+  const nomes: Record<string, string> = {};
+  for (const rota of rotas) {
+    const nome = corrigirCaixa((rota.route_long_name ?? "").trim());
+    const letreiro = prefixoLetreiro(rota.route_id ?? "");
+    if (nome === "" || letreiro === "" || nomes[letreiro] !== undefined) continue;
+    nomes[letreiro] = nome;
+  }
+  return nomes;
+}
+
 export type ParadaOlhoVivo = {
   readonly cp: number;
   readonly nome: string;
