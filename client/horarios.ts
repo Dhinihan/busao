@@ -85,6 +85,7 @@ export function ultimasPartidas(
   agoraMin: number,
   quantidade: number,
 ): readonly string[] {
+  if (quantidade <= 0) return [];
   return partidasOrdenadas(partidas)
     .filter((par) => par.minutos < agoraMin)
     .slice(-quantidade)

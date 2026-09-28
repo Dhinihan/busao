@@ -142,13 +142,19 @@ export function PainelHorarios(props: {
         )}
 
         {(passadas.length > 0 || partidas.length > 0) && (
-          <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+          <ul
+            className={
+              "m-0 flex list-none flex-wrap gap-1.5 p-0" +
+              (partidas.length === 0 ? " mt-2" : "")
+            }
+          >
             {passadas.map((partida) => (
               <li key={partida}>
                 <span
-                  className="inline-block rounded-lg bg-[#f3f4f1] px-2 py-1 font-mono text-sm font-bold text-[#9aa0a6] line-through"
+                  className="inline-block rounded-lg bg-[#f3f4f1] px-2 py-1 font-mono text-sm font-bold text-[#6b6f75] line-through"
                   title="já saiu"
                 >
+                  <span className="sr-only">já saiu: </span>
                   {partida}
                 </span>
               </li>
