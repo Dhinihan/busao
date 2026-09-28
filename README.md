@@ -7,8 +7,7 @@ Site minimalista para acompanhar em tempo real onde estão os ônibus das linhas
 - **Pontos de ônibus** como ícones discretos a partir do zoom 15: ao tocar,
   painel com as linhas que passam e previsão de chegada — hoje só para os
   pontos de corredor (limitação da API da SPTrans)
-- **Duplo toque** no mapa aproxima o zoom no ponto tocado; outro duplo toque
-  volta ao zoom anterior
+- **Duplo toque** no mapa o maximiza; outro duplo toque volta ao tamanho normal
 - Trajeto completo da linha desenhado pela geometria oficial do GeoSampa
 - Círculo do ônibus na **cor oficial da linha** (GTFS da SPTrans, gerado em
   `shared/cores.ts`); sem cor no feed, cai na paleta da área operacional de

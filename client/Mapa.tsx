@@ -7,7 +7,6 @@ import {
   pixelEmMundo,
   pontoParaPixelDeTela,
   tilesVisiveis,
-  zoomEmPixel,
   type Pixel,
   type Ponto,
 } from "../shared/tile-math";
@@ -73,13 +72,9 @@ export function Mapa(props: {
     zoomInicial: number;
     ancora: Ponto;
   } | null>(null);
-  // Toque em curso (um dedo só, ainda não soltou), o último toque completo e o
-  // zooms de antes e depois do último duplo toque, para o próximo desfazer.
+  // Toque em curso (um dedo só, ainda não soltou) e o último toque completo.
   const toqueEmCursoRef = useRef<Toque | null>(null);
   const ultimoToqueRef = useRef<Toque | null>(null);
-  const zoomDoDuploToqueRef = useRef<{ antes: number; depois: number } | null>(
-    null,
-  );
   const enquadrouAte = useRef<Set<number>>(new Set());
   const centralizouRef = useRef(false);
   const marcacoesRef = useRef<HTMLDivElement | null>(null);
@@ -200,7 +195,6 @@ export function Mapa(props: {
     if (ativos.length === 2) {
       arrasteRef.current = null;
       ultimoToqueRef.current = null;
-      zoomDoDuploToqueRef.current = null;
       const [a, b] = ativos;
       if (a === undefined || b === undefined) return;
       const meio = meioEntre(a, b);
@@ -254,32 +248,16 @@ export function Mapa(props: {
     setQuadro({ ...novo, zoom: quadro.zoom });
   }
 
-  function aoDuploToque(local: Pixel) {
-    // Só desfaz se o zoom ainda é o que o último duplo toque deixou; se outro
-    // caminho (enquadramento, localização) mexeu, volta a aproximar.
-    const ultimo = zoomDoDuploToqueRef.current;
-    const desfazer = ultimo !== null && ultimo.depois === quadro.zoom;
-    const alvo = desfazer
-      ? ultimo.antes
-      : limitarZoom(Math.round(quadro.zoom) + 1);
-    if (alvo === quadro.zoom) return;
-    zoomDoDuploToqueRef.current = desfazer
-      ? null
-      : { antes: quadro.zoom, depois: alvo };
-    setQuadro(zoomEmPixel(quadro, local, tamanho, alvo));
-  }
-
   function aoSoltar(evento: PointerEvent) {
     const inicio = toqueEmCursoRef.current;
     toqueEmCursoRef.current = null;
     if (inicio !== null && evento.type === "pointerup") {
-      const local = posicaoLocal(evento);
-      const fim = { ...local, t: evento.timeStamp };
+      const fim = { ...posicaoLocal(evento), t: evento.timeStamp };
       if (!ehToque(inicio, fim)) {
         ultimoToqueRef.current = null;
       } else if (ehDuploToque(ultimoToqueRef.current, fim)) {
         ultimoToqueRef.current = null;
-        aoDuploToque(local);
+        aoAlternarExpansao();
       } else {
         ultimoToqueRef.current = fim;
       }
@@ -296,7 +274,6 @@ export function Mapa(props: {
   }
 
   function alternarZoom(delta: number) {
-    zoomDoDuploToqueRef.current = null;
     setQuadro((atual) => ({
       ...atual,
       zoom: limitarZoom(atual.zoom + delta),
