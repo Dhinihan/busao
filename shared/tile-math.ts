@@ -45,6 +45,24 @@ export function deslocarMundo(ponto: Ponto, dx: number, dy: number, zoom: number
   return pixelEmMundo({ x: atual.x + dx, y: atual.y + dy }, zoom);
 }
 
+// Novo quadro no `zoom` dado que mantém o ponto sob `pixelDeTela` parado.
+export function zoomEmPixel(
+  quadro: Ponto & { readonly zoom: number },
+  pixelDeTela: Pixel,
+  tamanho: { readonly largura: number; readonly altura: number },
+  zoom: number,
+): Ponto & { readonly zoom: number } {
+  const dx = pixelDeTela.x - tamanho.largura / 2;
+  const dy = pixelDeTela.y - tamanho.altura / 2;
+  const ancora = deslocarMundo(quadro, dx, dy, quadro.zoom);
+  const ancoraPixel = mundoEmPixel(ancora, zoom);
+  const centro = pixelEmMundo(
+    { x: ancoraPixel.x - dx, y: ancoraPixel.y - dy },
+    zoom,
+  );
+  return { ...centro, zoom };
+}
+
 export function tilesVisiveis(opcoes: {
   readonly centro: Ponto;
   readonly zoom: number;
