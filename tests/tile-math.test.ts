@@ -8,6 +8,7 @@ import {
   pixelEmMundo,
   pontoParaPixelDeTela,
   tilesVisiveis,
+  zoomEmPixel,
 } from "../shared/tile-math.ts";
 
 const SAO_PAULO = { lat: -23.5505, lng: -46.6333 };
@@ -151,4 +152,29 @@ test("enquadrar escolhe zoom que cabe na tela e centra o grupo", () => {
 test("enquadrar sem pontos devolve São Paulo padrão", () => {
   const quadro = enquadrarPontos([], { largura: 800, altura: 600 });
   assert.equal(quadro.zoom, 12);
+});
+
+test("zoomEmPixel mantém o ponto tocado no mesmo lugar da tela", () => {
+  const quadro = { ...SAO_PAULO, zoom: 12 };
+  const tamanho = { largura: 400, altura: 600 };
+  const toque = { x: 300, y: 100 };
+  const antes = pixelEmMundo(
+    {
+      x: mundoEmPixel(quadro, 12).x + toque.x - tamanho.largura / 2,
+      y: mundoEmPixel(quadro, 12).y + toque.y - tamanho.altura / 2,
+    },
+    12,
+  );
+  const novo = zoomEmPixel(quadro, toque, tamanho, 13);
+  assert.equal(novo.zoom, 13);
+  const depois = pontoParaPixelDeTela(antes, { centro: novo, zoom: 13, ...tamanho });
+  assert.ok(Math.abs(depois.x - toque.x) < 1e-6);
+  assert.ok(Math.abs(depois.y - toque.y) < 1e-6);
+});
+
+test("zoomEmPixel no centro da tela não move o centro", () => {
+  const quadro = { ...SAO_PAULO, zoom: 12 };
+  const novo = zoomEmPixel(quadro, { x: 200, y: 300 }, { largura: 400, altura: 600 }, 14);
+  assert.ok(Math.abs(novo.lat - SAO_PAULO.lat) < 1e-9);
+  assert.ok(Math.abs(novo.lng - SAO_PAULO.lng) < 1e-9);
 });

@@ -7,9 +7,11 @@ import {
   pixelEmMundo,
   pontoParaPixelDeTela,
   tilesVisiveis,
+  zoomEmPixel,
   type Pixel,
   type Ponto,
 } from "../shared/tile-math";
+import { ehDuploToque, ehToque, type Toque } from "../shared/toque";
 import { paradasNoQuadro } from "../shared/paradas";
 import type { Parada } from "../shared/paradas";
 import {
@@ -71,6 +73,11 @@ export function Mapa(props: {
     zoomInicial: number;
     ancora: Ponto;
   } | null>(null);
+  // Toque em curso (um dedo só, ainda não soltou), o último toque completo e o
+  // zoom de antes do último duplo toque, para o próximo duplo toque desfazer.
+  const toqueEmCursoRef = useRef<Toque | null>(null);
+  const ultimoToqueRef = useRef<Toque | null>(null);
+  const zoomAntesDoDuploToqueRef = useRef<number | null>(null);
   const enquadrouAte = useRef<Set<number>>(new Set());
   const centralizouRef = useRef(false);
   const marcacoesRef = useRef<HTMLDivElement | null>(null);
@@ -184,8 +191,14 @@ export function Mapa(props: {
     (evento.currentTarget as HTMLElement).setPointerCapture(evento.pointerId);
     ponteirosRef.current.set(evento.pointerId, posicaoLocal(evento));
     const ativos = [...ponteirosRef.current.values()];
+    toqueEmCursoRef.current =
+      ativos.length === 1
+        ? { ...posicaoLocal(evento), t: evento.timeStamp }
+        : null;
     if (ativos.length === 2) {
       arrasteRef.current = null;
+      ultimoToqueRef.current = null;
+      zoomAntesDoDuploToqueRef.current = null;
       const [a, b] = ativos;
       if (a === undefined || b === undefined) return;
       const meio = meioEntre(a, b);
@@ -242,7 +255,30 @@ export function Mapa(props: {
     setQuadro({ ...novo, zoom: quadro.zoom });
   }
 
+  function aoDuploToque(local: Pixel) {
+    const anterior = zoomAntesDoDuploToqueRef.current;
+    const alvo =
+      anterior ?? limitarZoom(Math.round(quadro.zoom) + 1);
+    if (alvo === quadro.zoom) return;
+    zoomAntesDoDuploToqueRef.current = anterior === null ? quadro.zoom : null;
+    setQuadro(zoomEmPixel(quadro, local, tamanho, alvo));
+  }
+
   function aoSoltar(evento: PointerEvent) {
+    const inicio = toqueEmCursoRef.current;
+    toqueEmCursoRef.current = null;
+    if (inicio !== null && evento.type === "pointerup") {
+      const local = posicaoLocal(evento);
+      const fim = { ...local, t: evento.timeStamp };
+      if (!ehToque(inicio, fim)) {
+        ultimoToqueRef.current = null;
+      } else if (ehDuploToque(ultimoToqueRef.current, fim)) {
+        ultimoToqueRef.current = null;
+        aoDuploToque(local);
+      } else {
+        ultimoToqueRef.current = fim;
+      }
+    }
     ponteirosRef.current.delete(evento.pointerId);
     const restantes = [...ponteirosRef.current.values()];
     if (restantes.length < 2 && gestoRef.current !== null) {
@@ -255,6 +291,7 @@ export function Mapa(props: {
   }
 
   function alternarZoom(delta: number) {
+    zoomAntesDoDuploToqueRef.current = null;
     setQuadro((atual) => ({
       ...atual,
       zoom: limitarZoom(atual.zoom + delta),
