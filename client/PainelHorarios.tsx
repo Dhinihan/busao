@@ -5,6 +5,7 @@ import {
   minutosAte,
   proximasPartidas,
   tipoDiaDe,
+  ultimasPartidas,
 } from "./horarios.ts";
 import { useDialogoModal } from "./hooks";
 import type { QuadroHorarios, TipoDia } from "./horarios.ts";
@@ -20,6 +21,8 @@ type EstadoPainel = {
   readonly quadro: QuadroHorarios | null;
   readonly erro: string | null;
 };
+
+const PARTIDAS_PASSADAS = 3;
 
 const SEM_QUADRO: EstadoPainel = { quadro: null, erro: null };
 
@@ -69,9 +72,9 @@ export function PainelHorarios(props: {
 
   const tipo = tipoDiaDe(agora);
   const agoraMin = agora.getHours() * 60 + agora.getMinutes();
-  const partidas = estado.quadro
-    ? proximasPartidas(estado.quadro.tipo_dia[tipo] ?? [], agoraMin)
-    : [];
+  const doDia = estado.quadro?.tipo_dia[tipo] ?? [];
+  const passadas = ultimasPartidas(doDia, agoraMin, PARTIDAS_PASSADAS);
+  const partidas = proximasPartidas(doDia, agoraMin);
   const proxima = partidas[0];
 
   return (
@@ -138,8 +141,24 @@ export function PainelHorarios(props: {
           </p>
         )}
 
-        {partidas.length > 0 && (
-          <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+        {(passadas.length > 0 || partidas.length > 0) && (
+          <ul
+            className={
+              "m-0 flex list-none flex-wrap gap-1.5 p-0" +
+              (partidas.length === 0 ? " mt-2" : "")
+            }
+          >
+            {passadas.map((partida) => (
+              <li key={partida}>
+                <span
+                  className="inline-block rounded-lg bg-[#f3f4f1] px-2 py-1 font-mono text-sm font-bold text-[#6b6f75] line-through"
+                  title="já saiu"
+                >
+                  <span className="sr-only">já saiu: </span>
+                  {partida}
+                </span>
+              </li>
+            ))}
             {partidas.map((partida) => {
               const falta = minutosAte(partida, agoraMin);
               const ehProxima = partida === proxima;

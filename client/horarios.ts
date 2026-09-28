@@ -60,16 +60,35 @@ export function minutosDaPartida(partida: string): number | null {
   return horas * 60 + minutos;
 }
 
+function partidasOrdenadas(
+  partidas: readonly string[],
+): readonly { readonly partida: string; readonly minutos: number }[] {
+  return partidas
+    .flatMap((partida) => {
+      const minutos = minutosDaPartida(partida);
+      return minutos === null ? [] : [{ partida, minutos }];
+    })
+    .sort((a, b) => a.minutos - b.minutos);
+}
+
 export function proximasPartidas(
   partidas: readonly string[],
   agoraMin: number,
 ): readonly string[] {
-  return [...partidas]
-    .flatMap((partida) => {
-      const minutos = minutosDaPartida(partida);
-      return minutos === null || minutos < agoraMin ? [] : [{ partida, minutos }];
-    })
-    .sort((a, b) => a.minutos - b.minutos)
+  return partidasOrdenadas(partidas)
+    .filter((par) => par.minutos >= agoraMin)
+    .map((par) => par.partida);
+}
+
+export function ultimasPartidas(
+  partidas: readonly string[],
+  agoraMin: number,
+  quantidade: number,
+): readonly string[] {
+  if (quantidade <= 0) return [];
+  return partidasOrdenadas(partidas)
+    .filter((par) => par.minutos < agoraMin)
+    .slice(-quantidade)
     .map((par) => par.partida);
 }
 

@@ -5,6 +5,7 @@ import {
   minutosDaPartida,
   proximasPartidas,
   tipoDiaDe,
+  ultimasPartidas,
 } from "../client/horarios.ts";
 
 test("tipoDiaDe separa dia útil, sábado e domingo", () => {
@@ -41,6 +42,31 @@ test("proximasPartidas descarta horários inválidos e não muta a entrada", () 
 
 test("proximasPartidas devolve vazio quando o dia já acabou", () => {
   assert.deepEqual(proximasPartidas(["04:00", "05:10"], 23 * 60 + 50), []);
+});
+
+test("ultimasPartidas devolve as n mais recentes já saídas, em ordem", () => {
+  const agora = 18 * 60 + 43;
+  assert.deepEqual(
+    ultimasPartidas(["18:50", "05:00", "18:30", "17:00", "18:10", "16:00"], agora, 3),
+    ["17:00", "18:10", "18:30"],
+  );
+});
+
+test("ultimasPartidas devolve menos de n quando há poucas", () => {
+  assert.deepEqual(ultimasPartidas(["xx:yy", "06:00", "19:00"], 7 * 60, 3), ["06:00"]);
+});
+
+test("ultimasPartidas devolve vazio sem passadas, sem partidas ou com n zero", () => {
+  assert.deepEqual(ultimasPartidas(["06:00"], 5 * 60, 3), []);
+  assert.deepEqual(ultimasPartidas([], 12 * 60, 3), []);
+  assert.deepEqual(ultimasPartidas(["05:00", "06:00"], 12 * 60, 0), []);
+  assert.deepEqual(ultimasPartidas(["05:00", "06:00"], 12 * 60, -1), []);
+});
+
+test("a partida no minuto atual conta como próxima, não como passada", () => {
+  const agora = 10 * 60;
+  assert.deepEqual(proximasPartidas(["09:50", "10:00"], agora), ["10:00"]);
+  assert.deepEqual(ultimasPartidas(["09:50", "10:00"], agora, 3), ["09:50"]);
 });
 
 test("minutosAte conta só para partidas futuras do mesmo dia", () => {
